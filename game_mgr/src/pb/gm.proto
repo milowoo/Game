@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "../pb";
+
+enum GM_CODE {
+  GAME_NOTICE = 0 ; //单个游戏公告
+  KICK_USER = 1;    // 踢用户
+  BLACK_LIST = 2;   // 加入黑名单
+  UNLOCK_BLACK = 3; // 解除白名单
+  REWARD_ITEM = 4;  //奖励物品
+  ALL_GAME_NOTICE = 10; //所有游戏公告
+}
+
+// 心跳,客户端无其他业务请求时，每2秒发送
+message GmCodeRequest {
+  int32 code = 1; //
+  string gameId = 2;
+  string uid = 3;
+  string opt = 4;
+  string operator = 5;
+}
+message GmCodeResponse {
+  int32 code = 1;
+  string msg = 2;
+}

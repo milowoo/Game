@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "../pb";
+
+//匹配申请
+message MatchRequest{
+  string uid = 1;
+  string gameId = 2;
+  int64 timeStamp = 3;
+  int32 score = 4;
+  string receiveSubject = 5;
+  string opt  = 6; //匹配保留字段
+}
+
+// 返回：匹配应答
+message MatchResponse {
+  int32 code = 1;
+  string msg = 2;
+}
+
+// 请求：取消匹配
+message CancelMatchRequest {
+  string uid = 1;
+  string gameId = 2;
+}
+
+// 返回：取消匹配
+message CancelMatchResponse {
+  int32 code = 1;
+}
+
+// 匹配结果通知
+message MatchOverRes {
+  int32 code = 1;             // 0：匹配成功  1：匹配超时
+  string msg = 2;
+
+  string gameId = 3;
+  string uid = 4;
+  string roomId = 5;          // 新的roomId
+  int64 timestamp = 6;        // 服务器时间戳（毫秒）
+  string opt = 7;             // 透传字段
+  string sign = 8;            // 签名
+  repeated string uidList = 9;  //匹配玩家信息
+  repeated string aiUidList = 10;  //ai Uid
+}
+

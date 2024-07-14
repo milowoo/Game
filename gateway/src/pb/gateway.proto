@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "../pb";
+
+
+
+
+// 心跳, gateway 通知游戏服，每2秒发送
+message PingRequest {
+    int64 timestamp = 1; // 服务器时间戳
+}
+
+
+message GameCommonRequest{
+    string gameId = 1;
+    string roomId = 2;
+    string uid = 3;
+    string protoName = 4;
+    bytes data = 5;
+}
+
+
