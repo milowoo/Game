@@ -8,18 +8,31 @@ import (
 )
 
 func (self *HandlerMgr) GetPlayerUID(reply string, msg *nats.Msg) {
-	sign := string(msg.Data)
-	player, err := self.server.MongoDao.GetPlayerBySign(sign)
+	var request pb.ApplyUidRequest
+	err := proto.Unmarshal(msg.Data, &request)
 	if err != nil {
-		self.log.Error("fail to get player by sign(%+v): %+v", sign, err)
+		response := &pb.ApplyUidResponse{
+			Code: 101,
+			Msg:  "Unmarshal failed",
+		}
+		res, _ := proto.Marshal(response)
+		// 伪同步响应：接收到请求消息后需向响应收件箱发送一条消息作为回应
+		err = self.NatsPool.Publish(reply, res)
+		if err != nil {
+			self.log.Error("SubscribeGetUid reply err %+v", err)
+		}
+		return
+	}
+	pid := request.GetPid()
+	player, err := self.server.MongoDao.GetPlayerByPid(pid)
+	if err != nil {
+		self.log.Error("fail to get player by sign(%+v): %+v", pid, err)
 	}
 	var uid string
 	if player == nil {
 		uid = self.GreateUid()
 		dbPlayer := domain.NewPlayer(uid)
-		dbPlayer.Sex = 1
-		dbPlayer.Url = "testUrl"
-		dbPlayer.Sign = sign
+		dbPlayer.Pid = pid
 		self.server.MongoDao.InsertPlayer(dbPlayer)
 	} else {
 		uid = player.Uid.String()
@@ -29,7 +42,7 @@ func (self *HandlerMgr) GetPlayerUID(reply string, msg *nats.Msg) {
 		Code: 0,
 		Msg:  "success",
 		Uid:  uid,
-		Data: sign,
+		Pid:  pid,
 	}
 
 	res, _ := proto.Marshal(response)

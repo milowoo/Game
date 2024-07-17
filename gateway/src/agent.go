@@ -66,6 +66,7 @@ type Agent struct {
 	delayDisconnectTimer *time.Timer
 	CachedMsgs           [][]byte
 	Log                  *log.Logger
+	Pid                  string
 	Uid                  string
 	RoomId               string
 	GameId               string
@@ -102,8 +103,7 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 	}
 
 	self.MsgFromAgentMgr <- func() {
-		self.LoginGame(values.Get("game_id"), values.Get("timestamp"), values.Get("nonstr"),
-			values.Get("post_data"), values.Get("sign"))
+		self.LoginGame(values.Get("game_id"), values.Get("timestamp"), values.Get("pid"), values.Get("token"))
 	}
 	return self
 }
@@ -292,6 +292,11 @@ func (self *Agent) OnBinary(msg []byte) {
 		handler.HeartBeatReply(self)
 		return
 	}
+
+	if protoName == "pb.ClientMatchRequest" {
+		handler.LoginHallRequest(self)
+		return
+	}
 	if protoName == "pb.ClientMatchRequest" {
 		//发起匹配请求
 		handler.MatchRequest(self)
@@ -459,9 +464,9 @@ func (self *Agent) DelayDisconnect(delay time.Duration) {
 	self.delayDisconnectTimer.Reset(delay)
 }
 
-func (self *Agent) LoginGame(gameId, t, nonStr, postDataStr, sign string) int {
+func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	if self.Config.AgentConfig.EnableLogRecv {
-		self.Log.Debug(" receive ====  %s %s %s %s %v", t, nonStr, postDataStr, sign)
+		self.Log.Debug(" receive ====  %+v %+s %s %s %v", t, gameId, pid, token)
 	}
 
 	timestamp, err := strconv.ParseInt(t, 10, 64)
@@ -487,36 +492,16 @@ func (self *Agent) LoginGame(gameId, t, nonStr, postDataStr, sign string) int {
 		return -1
 	}
 
-	//expectedSign := GetSha1HexSign(timestamp, nonStr, postDataStr, config.AppKey)
-	//if config.EnableCheckLoginParams && expectedSign != sign {
-	//	self.Log.Error("unexpected sign, %s, %s", sign, expectedSign)
-	//	self.DoLoginReply(103, "unexpected sign", 0)
-	//	return -1
-	//}
-
-	//if err := json.Unmarshal([]byte(postDataStr), postData); err != nil {
-	//	self.DoLoginReply(104, "illegal postData", 0)
-	//	return -1
-	//}
-
-	//if config.EnableCheckLoginParams && postData.GameId != config.GameID {
-	//	self.DoLoginReply(105, "unexpected gameid", 0)
-	//	return
-	//}
-
-	//if config.EnableCheckLoginParams && postData.ChannelId != config.ChannelID {
-	//	self.DoLoginReply(false, "unexpected channelid")
-	//	return
-	//}
+	//去平台验签
 
 	//调用ucenter获取 userId
-	uid, err := g_Server.UCenterMgr.ApplyUid(nonStr)
+	uid, err := g_Server.UCenterMgr.ApplyUid(pid)
 	if err != nil {
-		self.Log.Error("EnterGame  %+v apply err %+v", nonStr, err)
+		self.Log.Error("EnterGame  %+v apply err %+v", pid, err)
 		handler.DoLoginReply(self, 106, "system err", 0)
 		return -1
 	}
-
+	self.Pid = pid
 	self.Uid = uid
 
 	//反射到agentMgr

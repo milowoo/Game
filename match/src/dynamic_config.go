@@ -9,18 +9,6 @@ import (
 	"time"
 )
 
-// 定义一个枚举类型
-type GameType int32
-
-// 使用 iota 定义枚举常量
-const (
-	UnKnow GameType = iota
-	Single
-	OneVOne
-	HallAndSingle
-	HallAnd1V1
-)
-
 type GameInfo struct {
 	GameId    string    `json:"gameId,omitempty"`
 	Type      int32     `json:"type,omitempty"`

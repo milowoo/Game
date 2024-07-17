@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
+	"match/src/constants"
 	"match/src/log"
 	"match/src/pb"
 	"match/src/redis"
@@ -23,7 +24,6 @@ type GameMatch struct {
 	log               *log.Logger
 	Config            *GlobalConfig
 	gameId            string
-	gameType          GameType
 	RedisDao          *redis.RedisDao
 	redisKey          string
 	lockKey           string
@@ -46,7 +46,6 @@ func NewGameMatch(server *Server, gameInfo *GameInfo) *GameMatch {
 		Config:            server.Config,
 		gameId:            gameInfo.GameId,
 		GameInfo:          gameInfo,
-		gameType:          GameType(gameInfo.Type),
 		RedisDao:          server.RedisDao,
 		redisKey:          gameInfo.GameId + ".match.queue",
 		lockKey:           gameInfo.GameId + ".match.lock",
@@ -125,10 +124,21 @@ func (self *GameMatch) Frame() {
 
 				firstMatchReq := self.UnCompressed([]byte(firstData))
 				secondMatchReq := self.UnCompressed([]byte(secondData))
-				uidList := make([]string, 0)
-				uidList = append(uidList, firstMatchReq.GetUid())
-				uidList = append(uidList, secondMatchReq.GetUid())
+				uidList := make([]*pb.MatchData, 0)
+				data := &pb.MatchData{
+					Pid: firstMatchReq.GetPid(),
+					Uid: firstMatchReq.GetUid(),
+				}
+				uidList = append(uidList, data)
+
+				secondUidData := &pb.MatchData{
+					Pid: secondMatchReq.GetPid(),
+					Uid: secondMatchReq.GetUid(),
+				}
+				uidList = append(uidList, secondUidData)
+
 				roomId := self.GenRoomId()
+				self.PublicCreateRoom(roomId)
 				self.Send2PlayerMatchRes(firstMatchReq, uidList, roomId)
 				self.Send2PlayerMatchRes(secondMatchReq, uidList, roomId)
 			} else {
@@ -137,6 +147,7 @@ func (self *GameMatch) Frame() {
 				matchReq := self.UnCompressed([]byte(data))
 				if matchReq.GetTimeStamp()+int64(self.GameInfo.MatchTime) > int64(time.Now().Unix()) {
 					roomId := self.GenRoomId()
+					self.PublicCreateRoom(roomId)
 					self.Send2PlayerWithAI(matchReq, roomId)
 				} else {
 					self.RedisDao.LPush(self.redisKey, data)
@@ -160,10 +171,20 @@ func (self *GameMatch) GenRoomId() string {
 }
 
 func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId string) {
-	uidList := make([]string, 0)
-	uidList = append(uidList, matchReq.GetUid())
-	aiList := make([]string, 0)
-	aiList = append(aiList, "1001")
+	uidList := make([]*pb.MatchData, 0)
+	matchData := &pb.MatchData{
+		Pid: matchReq.Pid,
+		Uid: matchReq.Uid,
+	}
+	uidList = append(uidList, matchData)
+	aiList := make([]*pb.MatchData, 0)
+	//todo test
+	aiData := &pb.MatchData{
+		Pid: "232eds",
+		Uid: "1001",
+	}
+
+	aiList = append(aiList, aiData)
 	response := &pb.MatchOverRes{
 		Code:      100,
 		Msg:       "Success",
@@ -179,7 +200,7 @@ func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId strin
 	self.Server.NatsPool.Publish(matchReq.GetReceiveSubject(), res)
 }
 
-func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []string, roomId string) {
+func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []*pb.MatchData, roomId string) {
 	response := &pb.MatchOverRes{
 		Code:      100,
 		Msg:       "Success",
@@ -188,7 +209,7 @@ func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []
 		RoomId:    roomId,
 		Timestamp: time.Now().Unix(),
 		UidList:   uidList,
-		AiUidList: make([]string, 0),
+		AiUidList: make([]*pb.MatchData, 0),
 	}
 
 	res, _ := proto.Marshal(response)
@@ -236,10 +257,14 @@ func (self *GameMatch) UnCompressed(compressedData []byte) *pb.MatchRequest {
 
 func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 	//单机游戏， 直接生成一个roomId，返回
-	uidList := make([]string, 0)
-	uidList = append(uidList, req.GetUid())
-
-	if self.gameType == Single || self.gameType == HallAndSingle || (self.gameType == HallAnd1V1 && req.GetOpt() == "HALL") {
+	uidList := make([]*pb.MatchData, 0)
+	data := &pb.MatchData{
+		Pid: req.GetPid(),
+		Uid: req.GetUid(),
+	}
+	uidList = append(uidList, data)
+	gameType := self.GameInfo.Type
+	if gameType == constants.GAME_TYPE_SINGLE || gameType == constants.GAME_TYPE_HALL_SINGLE {
 		response := &pb.MatchOverRes{
 			Code:      100,
 			Msg:       "Success",
@@ -248,7 +273,7 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 			RoomId:    self.gameId + "_room_" + req.GetUid(),
 			Timestamp: time.Now().Unix(),
 			UidList:   uidList,
-			AiUidList: make([]string, 0),
+			AiUidList: make([]*pb.MatchData, 0),
 		}
 
 		res, _ := proto.Marshal(response)
@@ -300,6 +325,19 @@ func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
 	}
 }
 
+func (self *GameMatch) LoginHallRequest(reply string, req *pb.LoginHallRequest) {
+	roomId := self.gameId + "_hall_" + req.GetUid()
+	response := &pb.LoginHallResponse{
+		Code:   100,
+		Msg:    "Success",
+		GameId: self.gameId,
+		Uid:    req.GetUid(),
+		RoomId: roomId,
+	}
+	self.PublicCreateRoom(roomId)
+	res, _ := proto.Marshal(response)
+	self.Server.NatsPool.Publish(reply, res)
+}
 func (self *GameMatch) Quit() {
 	self.exit <- true
 }

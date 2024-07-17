@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "../pb";
+
+// 进入大厅
+message LoginHallRequest {
+  int64 timestamp = 1;
+}
+
+// 进入大厅应答
+message LoginHallResponse {
+   int32 code  =1 ;
+   string msg = 2;
+   string roomId = 3; //需要跳转的房间ID
+}
+
+// 进入房间
+message LoginRoomRequest {
+
+}
+
+// 进入大厅应答
+message LoginRoomResponse {
+  int32 code  =1 ;
+  string msg = 2;
+}
+
+
+
+
+

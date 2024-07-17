@@ -1,0 +1,144 @@
+
+syntax = "proto3";
+
+package pb;
+option go_package = "../pb";
+
+//游戏胜负的通知
+message GameOverResponse {
+    string reason = 1;
+    string winUid = 2;
+    string winTeamId = 3;
+    string result = 4; //GameResult 转 string
+}
+
+message GameResult {
+    int64 timestamp = 1;
+    string nonStr = 2;
+    string sign = 3;
+    string gameType = 4;
+    GameResultDetail result = 5;
+    string resultRawData = 6;
+}
+
+message GameResultDetail {
+    string gameId = 1;
+    string roomId = 2;
+    string channelId = 3;
+    string resultType = 4;
+    int32 subGameMode = 5;
+    int32 juCi = 6;
+    repeated GameInfo gameInfos = 7;
+}
+
+message GameInfo {
+    string uid = 1;
+    bool isWinner = 2;
+    string jiFen =3;
+    string hallId = 4;
+}
+
+// 因为socket url直接附带上了基础参数,因此不需要客户端主动的login
+message LoginResponse {
+    int32 code = 1;
+    string msg = 2;
+    string uid = 3;
+    string roomId = 4;
+    int32 reconnect = 5;
+}
+
+//进入大厅
+message ClientLoginHallRequest{
+
+}
+
+
+//进入大厅
+message ClientLoginHallResponse{
+    int32 code = 1;
+    string msg = 2;
+}
+
+message JumpGameRoomNoticeRes {
+    string roomId = 1;
+    string opt = 2;
+}
+
+message ClientMatchRequest {
+}
+
+message ClientMatchResponse {
+    int32 code = 1;
+    string msg = 2;
+}
+
+//取消匹配
+message ClientCancelMatchRequest {
+}
+
+
+message ClientCancelMatchResponse {
+    int32 code = 1;
+    string msg = 2;
+}
+
+
+// 匹配结果通知
+message ClientMatchOverRes {
+    string uid = 1;
+    string roomId = 2;          // 新的roomId
+    int64 timestamp = 3;        // 服务器时间戳（毫秒）
+    string opt = 4;             // 透传字段
+    repeated string uidList = 5;  //匹配玩家信息
+    repeated string aiUidList = 6;  //ai Uid
+}
+
+message LoadProgressRequest {
+    int32 progress  = 1;
+    string sn = 2;
+}
+
+message Progress {
+    string uid = 1;
+    int32 progress = 2;
+}
+
+message LoadProgressResponse {
+    int32 code =1;
+    string msg = 2;
+    repeated Progress data  = 3;
+}
+
+
+message UserLoginRes {
+    int32 code = 1;
+    string msg = 2;
+    repeated string uidList = 3;
+    string sn = 100;
+}
+
+message UserExitRequest {
+    int32 reason = 1;
+}
+
+message UserExitResponse {
+    int32 code = 1;
+    string msg = 2;
+}
+
+message GiveUpRequest {
+}
+
+message GiveUpResponse {
+    int32 code = 1;
+    string msg = 2;
+}
+
+// 心跳,客户端无其他业务请求时，每2秒发送
+message HeartbeatRequest {
+    int64 timestamp = 1; // 客户端时间戳
+}
+
+message HeartbeatResponse {
+    int64 timestamp = 1; // 服务器时间戳
+}

@@ -22,6 +22,7 @@ func NewHandler(server *ucenter.Server) *HandlerMgr {
 		NatsPool:    server.NatsPool,
 		MsgFromNats: make(chan ucenter.Closure, 4096),
 		log:         server.Log,
+		exit:        make(chan bool),
 	}
 }
 

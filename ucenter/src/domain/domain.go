@@ -11,9 +11,7 @@ import (
  */
 type Player struct {
 	Uid   bson.ObjectId `bson:"_id,omitempty"`
-	Url   string        `bson:"url" json:"url"`
-	Sign  string        `bson:"sign" json:"sign"`
-	Sex   int8          `bson:"sex" json:"sex"`
+	Pid   string        `bson:"sign" json:"sign"`
 	Utime time.Time     `bson:"utime" json:"utime"`
 }
 

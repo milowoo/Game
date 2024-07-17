@@ -47,7 +47,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 	g_Server.RedisDao = redisDao
 
-	pool, err := mq.NatsInit(config.NatsConfig.Address, log)
+	pool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
 		log.Error("NewServer nat init err")
 		return nil, err

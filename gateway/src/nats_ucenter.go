@@ -26,8 +26,8 @@ func NewNatsUCenter(server *Server) *NatsUCenter {
 	}
 }
 
-func (self *NatsUCenter) ApplyUid(app string) (string, error) {
-	request, _ := proto.Marshal(&pb.ApplyUidRequest{Data: app})
+func (self *NatsUCenter) ApplyUid(pid string) (string, error) {
+	request, _ := proto.Marshal(&pb.ApplyUidRequest{Pid: pid})
 	var response interface{}
 	err := self.NatsPool.Request(self.subject, request, &response, 3*time.Second)
 	if err != nil {
@@ -37,7 +37,7 @@ func (self *NatsUCenter) ApplyUid(app string) (string, error) {
 
 	natsMsg, ok := response.(*nats.Msg)
 	if !ok {
-		self.log.Error("Failed to convert interface{} to *nats.Msg app %+v", app)
+		self.log.Error("Failed to convert interface{} to *nats.Msg pid %+v", pid)
 	}
 
 	var applyResponse pb.ApplyUidResponse

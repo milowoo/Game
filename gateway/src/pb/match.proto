@@ -3,14 +3,35 @@ syntax = "proto3";
 package pb;
 option go_package = "../pb";
 
+//进入大厅
+message LoginHallRequest{
+  string gameId = 1;
+  string pid = 2;
+  string uid = 3;
+}
+
+
+//进入大厅应答
+message LoginHallResponse{
+  int32 code = 1;
+  string msg = 2;
+  string gameId = 3;
+  string pid = 4;
+  string uid = 5;
+  string roomId = 6;
+}
+
+
+
 //匹配申请
 message MatchRequest{
-  string uid = 1;
-  string gameId = 2;
-  int64 timeStamp = 3;
-  int32 score = 4;
-  string receiveSubject = 5;
-  string opt  = 6; //匹配保留字段
+  string gameId = 1;
+  string pid = 2;
+  string uid = 3;
+  int64 timeStamp = 4;
+  int32 score = 5;
+  string receiveSubject = 6;
+  string opt  = 7; //匹配保留字段  hall 代表进入大厅 否则就是进入room
 }
 
 // 返回：匹配应答
@@ -21,13 +42,20 @@ message MatchResponse {
 
 // 请求：取消匹配
 message CancelMatchRequest {
-  string uid = 1;
-  string gameId = 2;
+  string gameId = 1;
+  string uid = 2;
+  string pid = 3;
 }
 
 // 返回：取消匹配
 message CancelMatchResponse {
   int32 code = 1;
+  string msg = 2;
+}
+
+message MatchData {
+   string uid = 1;
+   string pid = 2;
 }
 
 // 匹配结果通知
@@ -37,11 +65,13 @@ message MatchOverRes {
 
   string gameId = 3;
   string uid = 4;
-  string roomId = 5;          // 新的roomId
-  int64 timestamp = 6;        // 服务器时间戳（毫秒）
-  string opt = 7;             // 透传字段
-  string sign = 8;            // 签名
-  repeated string uidList = 9;  //匹配玩家信息
-  repeated string aiUidList = 10;  //ai Uid
+  string pid = 5;
+  string roomId = 6;          // 新的roomId
+  int64 timestamp = 7;        // 服务器时间戳（毫秒）
+  string opt = 8;             // 透传字段
+  string sign = 9;            // 签名
+  repeated MatchData uidList = 10;  //匹配玩家信息
+  repeated MatchData aiUidList = 11;  //ai Uid
 }
+
 

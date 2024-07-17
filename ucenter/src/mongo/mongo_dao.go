@@ -80,15 +80,15 @@ func (dao *MongoDAO) DeletePlayer(uid string) error {
 	return nil
 }
 
-func (dao *MongoDAO) GetPlayerBySign(sign string) (*domain.Player, error) {
+func (dao *MongoDAO) GetPlayerByPid(pid string) (*domain.Player, error) {
 	session := dao.dataSource.GetSession()
 	defer session.Close()
 
 	c := session.DB(dao.dataSource.database).C("player")
 	m := domain.Player{}
-	err := c.Find(&bson.M{"sign": sign}).One(&m)
+	err := c.Find(&bson.M{"pid": pid}).One(&m)
 	if err != nil {
-		dao.log.Info("GetPlayer err %v sign %v ", err, sign)
+		dao.log.Info("GetPlayer err %v pid %v ", err, pid)
 		return &m, err
 	}
 	return &m, nil

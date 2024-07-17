@@ -11,7 +11,6 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"github.com/nats-io/go-nats"
 	"net/http"
 	"os"
 	"os/signal"
@@ -51,13 +50,6 @@ func NewServer(log *log.Logger) (*Server, error) {
 		Log:       log,
 	}
 
-	nc, err := nats.Connect(config.NatsConfig.Address)
-	if nc == nil {
-		log.Error("nats连接失败 %+v", err)
-		return nil, err
-	}
-	defer nc.Close()
-
 	agentMgr := NewAgentMgr(g_Server)
 	g_Server.AgentMgr = agentMgr
 	natsMatch := NewNatsMatch(g_Server)
@@ -66,6 +58,13 @@ func NewServer(log *log.Logger) (*Server, error) {
 	g_Server.UCenterMgr = natsUCenter
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 	g_Server.RedisDao = redisDao
+	natsPool, err := mq.NatsInit(config.NatsConfig.Address)
+	if err != nil {
+		log.Error("nats 连接失败 %+v", err)
+		return nil, err
+	}
+
+	g_Server.NatsPool = natsPool
 
 	g_Server.ConfigClient, err = g_Server.InitNacos(config)
 	if err != nil {
