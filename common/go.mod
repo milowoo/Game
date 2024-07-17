@@ -1,4 +1,4 @@
-module common
+module github.com/milowoo/Game/common
 
 go 1.21
 
