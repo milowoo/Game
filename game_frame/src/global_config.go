@@ -8,6 +8,7 @@ import (
 
 type GlobalConfig struct {
 	GameId      string
+	GroupName   string
 	Level       string
 	RedisConfig *RedisConfig
 	NatsConfig  *NatsConfig
@@ -62,6 +63,14 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 	}
 
 	ret.GameId = key.MustString("xx")
+
+	key, err = section.GetKey("gameGroup")
+	if err != nil {
+		log.Error("NewGlobalConfig  GetSection game  gameId err")
+		return nil, err
+	}
+
+	ret.GroupName = key.MustString("A")
 
 	key, err = section.GetKey("level")
 	if err != nil {

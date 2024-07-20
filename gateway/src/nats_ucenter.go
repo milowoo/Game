@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"errors"
+	"gateway/src/constants"
 	"gateway/src/log"
 	"gateway/src/mq"
 	"gateway/src/pb"
@@ -13,7 +14,6 @@ import (
 type NatsUCenter struct {
 	Server   *Server
 	log      *log.Logger
-	subject  string
 	NatsPool *mq.NatsPool
 }
 
@@ -21,7 +21,6 @@ func NewNatsUCenter(server *Server) *NatsUCenter {
 	return &NatsUCenter{
 		Server:   server,
 		log:      server.Log,
-		subject:  "ucenter.apply.uid",
 		NatsPool: server.NatsPool,
 	}
 }
@@ -29,7 +28,7 @@ func NewNatsUCenter(server *Server) *NatsUCenter {
 func (self *NatsUCenter) ApplyUid(pid string) (string, error) {
 	request, _ := proto.Marshal(&pb.ApplyUidRequest{Pid: pid})
 	var response interface{}
-	err := self.NatsPool.Request(self.subject, request, &response, 3*time.Second)
+	err := self.NatsPool.Request(constants.UCENTER_APPLY_UID_SUBJECT, request, &response, 3*time.Second)
 	if err != nil {
 		self.log.Error("applyUid err %+v", err)
 		return "", err
@@ -38,6 +37,7 @@ func (self *NatsUCenter) ApplyUid(pid string) (string, error) {
 	natsMsg, ok := response.(*nats.Msg)
 	if !ok {
 		self.log.Error("Failed to convert interface{} to *nats.Msg pid %+v", pid)
+		return "", err
 	}
 
 	var applyResponse pb.ApplyUidResponse

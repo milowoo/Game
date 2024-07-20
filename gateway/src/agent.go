@@ -3,10 +3,10 @@ package gateway
 import (
 	"bytes"
 	"compress/zlib"
+	"gateway/src/constants"
 	"gateway/src/handler"
 	"gateway/src/log"
 	"gateway/src/pb"
-	"github.com/nats-io/go-nats"
 	"math"
 	"net/url"
 	"reflect"
@@ -26,6 +26,8 @@ const (
 
 	AgentFPS           = 20
 	AgentFrameInterval = time.Second / AgentFPS
+
+	CheckGameExceptionInternal = time.Second * 10 / AgentFPS
 
 	SizeBytes = 0 // 对于websocket，没有sizebyte也ok
 	MultiFlag = "pb.multi"
@@ -56,12 +58,13 @@ type Agent struct {
 	AgentMgr          *AgentMgr
 	LastPingTimeFrame int
 	ConnectTimeFrame  int
-	InHall            int
+	InHall            int //0 init 1 hall 2 room
 
 	FrameTicker          *time.Ticker
 	FrameID              int
 	IsMatching           bool
 	NextCheckPingFrame   int
+	RequestGameErrFrame  int
 	IsDisconnected       bool
 	delayDisconnectTimer *time.Timer
 	CachedMsgs           [][]byte
@@ -71,6 +74,7 @@ type Agent struct {
 	RoomId               string
 	GameId               string
 	GameSubject          string
+	Counter              *AtomicCounter
 }
 
 // new agent
@@ -100,6 +104,8 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		RoomId:               "",
 		GameId:               "",
 		GameSubject:          "",
+		RequestGameErrFrame:  0,
+		Counter:              &AtomicCounter{},
 	}
 
 	self.MsgFromAgentMgr <- func() {
@@ -287,9 +293,20 @@ func (self *Agent) OnBinary(msg []byte) {
 		self.Log.Error("uid %+v receive ==== %s %+v", self.Uid, protoName, protoBody)
 	}
 
+	//检验游戏是否在开放
+	if !self.checkGameOpen() {
+		self.Log.Error("uid %v invalid game request", self.Uid)
+		return
+	}
+
 	//如果不是心跳包，则需要转发给游戏服务
 	if protoName == "pb.HeartbeatRequest" {
 		handler.HeartBeatReply(self)
+		return
+	}
+
+	if protoName == "pb.ClientLoginHallRequest" {
+		handler.LoginHallRequest(self)
 		return
 	}
 
@@ -310,8 +327,24 @@ func (self *Agent) OnBinary(msg []byte) {
 	}
 
 	//转发消息给游戏服务器，并接收应答给客户端
-	self.ForwardNeedResponse(protoBody)
+	handler.ForwardClientRequest(self, protoName, protoBody)
 
+}
+
+func (self *Agent) checkGameOpen() bool {
+	gameInfo := self.DynamicConfig.GetGameInfo(self.GameId)
+	if gameInfo == nil {
+		self.Log.Warn("LoginHallRequest uid %+v get game info err gameId %+v", self.Uid, self.GameId)
+		return false
+	}
+
+	if gameInfo.Status != 1 {
+		self.Log.Warn("LoginHallRequest uid %+v game status %+v err gameId %+v", self.Uid, gameInfo.Status, self.GameId)
+		self.DelayDisconnect(5)
+		return false
+	}
+
+	return true
 }
 
 func (self *Agent) OnText(msg string) {
@@ -328,7 +361,7 @@ func (self *Agent) OnClose() {
 	close(self.SendQueue)
 
 	if !self.IsDisconnected {
-		self.notifyLostAgent()
+		self.notifyLostAgent(true)
 	}
 }
 
@@ -382,15 +415,7 @@ func (self *Agent) FlushCachedMsgs() {
 
 }
 
-func (self *Agent) ReplyClient(protoMsg proto.Message) {
-	binary, err := GetBinary(protoMsg, self.Log, self.Config.AgentConfig)
-	if err != nil {
-		return
-	}
-	self.SendBinaryNow(binary)
-}
-
-func (self *Agent) notifyLostAgent() {
+func (self *Agent) notifyLostAgent(noticeGame bool) {
 	if len(self.Uid) <= 1 {
 		return
 	}
@@ -404,7 +429,10 @@ func (self *Agent) notifyLostAgent() {
 	self.CloseConnect()
 
 	//通知 game_x 用户失去链接
-	handler.UserExitHandler(self, 1)
+	if noticeGame {
+		handler.UserExitHandler(self, 1)
+	}
+
 }
 
 func (self *Agent) CloseConnect() {
@@ -422,7 +450,7 @@ func (self *Agent) checkInvalidAgent() {
 		return
 	}
 
-	self.notifyLostAgent()
+	self.notifyLostAgent(true)
 
 	self.Log.Info("checkInvalidAgent uid %v delayDisconnect: ping timeout", self.Uid)
 	self.DelayDisconnect(0)
@@ -438,7 +466,7 @@ func (self *Agent) CheckPing() {
 		return
 	}
 
-	self.notifyLostAgent()
+	self.notifyLostAgent(true)
 	self.Log.Info("CheckPing uid %v delayDisconnect: ping timeout", self.Uid)
 	self.DelayDisconnect(0)
 }
@@ -455,6 +483,20 @@ func (self *Agent) Frame() {
 	self.checkInvalidAgent()
 
 	self.FlushCachedMsgs()
+
+	self.checkGameException()
+}
+
+func (self *Agent) checkGameException() {
+	if self.RequestGameErrFrame == 0 {
+		return
+	}
+	if self.RequestGameErrFrame < self.FrameID-int(CheckGameExceptionInternal/AgentFrameInterval) {
+		self.notifyLostAgent(false)
+
+		self.Log.Info("checkInvalidAgent uid %v delayDisconnect: ping timeout", self.Uid)
+		self.DelayDisconnect(0)
+	}
 }
 
 func (self *Agent) DelayDisconnect(delay time.Duration) {
@@ -471,24 +513,24 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 
 	timestamp, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
-		handler.DoLoginReply(self, 101, "unexpected timestamp", 0)
+		handler.DoLoginReply(self, constants.INVALID_TIME, "unexpected timestamp", 0)
 		return -1
 	}
 
 	config := self.Config.AgentConfig
 	if config.EnableCheckLoginParams && math.Abs(float64(time.Now().Sub(time.Unix(timestamp, 0)))) >= float64(config.TimestampExpireDuration) {
-		handler.DoLoginReply(self, 102, "timestamp expired", 0)
+		handler.DoLoginReply(self, constants.EXPIRED_TIME, "timestamp expired", 0)
 		return -1
 	}
 
 	gameInfo := self.DynamicConfig.GetGameInfo(gameId)
 	if gameInfo == nil {
-		handler.DoLoginReply(self, 103, "invalid gameId", 0)
+		handler.DoLoginReply(self, constants.INVALID_GAME_ID, "invalid gameId", 0)
 		return -1
 	}
 
 	if gameInfo.Status != 1 {
-		handler.DoLoginReply(self, 103, "game offline", 0)
+		handler.DoLoginReply(self, constants.GAME_IS_OFF, "game offline", 0)
 		return -1
 	}
 
@@ -498,7 +540,7 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	uid, err := g_Server.UCenterMgr.ApplyUid(pid)
 	if err != nil {
 		self.Log.Error("EnterGame  %+v apply err %+v", pid, err)
-		handler.DoLoginReply(self, 106, "system err", 0)
+		handler.DoLoginReply(self, constants.SYSTEM_ERROR, "system err", 0)
 		return -1
 	}
 	self.Pid = pid
@@ -513,31 +555,14 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	return 0
 }
 
-func (self *Agent) GetChanForAgentMgr() chan Closure {
-	return self.MsgFromAgentMgr
-}
-
 func (self *Agent) MatchResponse(res *pb.MatchOverRes) {
 	handler.MatchOverResponse(self, res)
 }
 
-func (self *Agent) ForwardNeedResponse(request proto.Message) {
-	if len(self.GameSubject) < 1 {
-		return
-	}
-	bytes, _ := proto.Marshal(request)
-	var response interface{}
-	err := self.Server.NatsPool.Request(self.GameSubject, bytes, &response, 3*time.Second)
+func (self *Agent) ReplyClient(protoMsg proto.Message) {
+	binary, err := GetBinary(protoMsg, self.Log, self.Config.AgentConfig)
 	if err != nil {
-		self.Log.Error("ForwardNeedResponse err %+v", err)
 		return
 	}
-	data, _ := response.(*nats.Msg)
-	var res proto.Message
-	err = proto.Unmarshal(data.Data, res)
-	if err != nil {
-		self.Log.Error("ForwardNeedResponse err %+v", err)
-		return
-	}
-	self.ReplyClient(res)
+	self.SendBinaryNow(binary)
 }

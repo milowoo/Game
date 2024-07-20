@@ -111,7 +111,7 @@ func (self *AgentMgr) MatchResponse(res *pb.MatchOverRes) {
 		return
 	}
 
-	RunOnAgent(agent.GetChanForAgentMgr(), agent, func(agent *Agent) {
+	RunOnAgent(agent.MsgFromAgentMgr, agent, func(agent *Agent) {
 		agent.MatchResponse(res)
 	})
 

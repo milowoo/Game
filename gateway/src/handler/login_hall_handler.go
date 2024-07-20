@@ -12,7 +12,7 @@ import (
 func LoginHallRequest(agent *gateway.Agent) {
 	if agent.IsMatching {
 		agent.Log.Warn("LoginHallRequest uid %+v is matching", agent.Uid)
-		LoginHallResponse(agent, 101, "player is matching")
+		LoginHallResponse(agent, constants.PLAYER_IS_MATCHING, "player is matching")
 		return
 	}
 
@@ -26,12 +26,6 @@ func LoginHallRequest(agent *gateway.Agent) {
 	if gameInfo.Type != constants.GAME_TYPE_HALL_1V1 && gameInfo.Type != constants.GAME_TYPE_HALL_SINGLE {
 		agent.Log.Warn("LoginHallRequest uid %+v invalid request %+v", agent.Uid, agent.GameId)
 		LoginHallResponse(agent, 103, "invalid request")
-		return
-	}
-
-	if gameInfo.Status != 1 {
-		agent.Log.Warn("LoginHallRequest uid %+v game status %+v err gameId %+v", agent.Uid, gameInfo.Status, agent.GameId)
-		LoginHallResponse(agent, 102, "system err")
 		return
 	}
 

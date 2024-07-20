@@ -2,13 +2,14 @@ package handler
 
 import (
 	gateway "gateway/src"
+	"gateway/src/constants"
 	"gateway/src/pb"
 )
 
 func CancelMatchRequest(agent *gateway.Agent) {
 	if !agent.IsMatching {
 		agent.Log.Warn("CancelMatchRequest uid %+v is not in matching", agent.Uid)
-		MatchResponse(agent, 101, "player is no in matching")
+		MatchResponse(agent, constants.PLAYER_NO_MATCHING, "player is no in matching")
 		return
 	}
 

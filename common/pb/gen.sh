@@ -1,1 +1,0 @@
-protoc  -I=. -I=../../../  --go_out=. *.proto

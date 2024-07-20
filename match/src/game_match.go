@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"match/src/constants"
+	"match/src/domain"
 	"match/src/log"
 	"match/src/pb"
 	"match/src/redis"
@@ -20,43 +21,41 @@ const (
 )
 
 type GameMatch struct {
-	Server            *Server
-	log               *log.Logger
-	Config            *GlobalConfig
-	gameId            string
-	RedisDao          *redis.RedisDao
-	redisKey          string
-	lockKey           string
-	roomKey           string
-	createRoomSubject string
-	GameInfo          *GameInfo
-	frameTicker       *time.Ticker
-	FrameID           int64
-	NextFrameId       int64
-	rand              *rand.Rand
-	MsgFromNats       chan Closure
-	exit              chan bool
+	Server      *Server
+	log         *log.Logger
+	Config      *GlobalConfig
+	gameId      string
+	RedisDao    *redis.RedisDao
+	redisKey    string
+	lockKey     string
+	roomKey     string
+	GameInfo    *domain.GameInfo
+	frameTicker *time.Ticker
+	FrameID     int64
+	NextFrameId int64
+	rand        *rand.Rand
+	MsgFromNats chan Closure
+	exit        chan bool
 }
 
-func NewGameMatch(server *Server, gameInfo *GameInfo) *GameMatch {
+func NewGameMatch(server *Server, gameInfo *domain.GameInfo) *GameMatch {
 	now := time.Now()
 	return &GameMatch{
-		Server:            server,
-		log:               server.Log,
-		Config:            server.Config,
-		gameId:            gameInfo.GameId,
-		GameInfo:          gameInfo,
-		RedisDao:          server.RedisDao,
-		redisKey:          gameInfo.GameId + ".match.queue",
-		lockKey:           gameInfo.GameId + ".match.lock",
-		roomKey:           "match_room_key",
-		createRoomSubject: "create.room.notice." + gameInfo.GameId,
-		FrameID:           0,
-		NextFrameId:       0,
-		frameTicker:       nil,
-		MsgFromNats:       make(chan Closure, 2048),
-		rand:              rand.New(rand.NewSource(now.Unix())),
-		exit:              make(chan bool, 1),
+		Server:      server,
+		log:         server.Log,
+		Config:      server.Config,
+		gameId:      gameInfo.GameId,
+		GameInfo:    gameInfo,
+		RedisDao:    server.RedisDao,
+		redisKey:    gameInfo.GameId + ".match.queue",
+		lockKey:     gameInfo.GameId + ".match.lock",
+		roomKey:     "match_room_key",
+		FrameID:     0,
+		NextFrameId: 0,
+		frameTicker: nil,
+		MsgFromNats: make(chan Closure, 2048),
+		rand:        rand.New(rand.NewSource(now.Unix())),
+		exit:        make(chan bool, 1),
 	}
 }
 
@@ -162,7 +161,8 @@ func (self *GameMatch) Frame() {
 }
 
 func (self *GameMatch) PublicCreateRoom(roomId string) {
-	self.Server.NatsPool.Publish(self.createRoomSubject, []byte(roomId))
+	subject := constants.GetCreateRoomNoticeSubject(self.GameInfo.GameId, self.GameInfo.GroupName)
+	self.Server.NatsPool.Publish(subject, []byte(roomId))
 }
 
 func (self *GameMatch) GenRoomId() string {
@@ -178,10 +178,14 @@ func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId strin
 	}
 	uidList = append(uidList, matchData)
 	aiList := make([]*pb.MatchData, 0)
-	//todo test
+	aiInfo := self.GetAiInfo()
+	if aiInfo == nil {
+		return
+	}
+
 	aiData := &pb.MatchData{
-		Pid: "232eds",
-		Uid: "1001",
+		Pid: aiInfo.Pid,
+		Uid: aiInfo.Uid,
 	}
 
 	aiList = append(aiList, aiData)
@@ -266,7 +270,7 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 	gameType := self.GameInfo.Type
 	if gameType == constants.GAME_TYPE_SINGLE || gameType == constants.GAME_TYPE_HALL_SINGLE {
 		response := &pb.MatchOverRes{
-			Code:      100,
+			Code:      constants.CODE_SUCCESS,
 			Msg:       "Success",
 			GameId:    self.gameId,
 			Uid:       req.GetUid(),
@@ -328,7 +332,7 @@ func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
 func (self *GameMatch) LoginHallRequest(reply string, req *pb.LoginHallRequest) {
 	roomId := self.gameId + "_hall_" + req.GetUid()
 	response := &pb.LoginHallResponse{
-		Code:   100,
+		Code:   constants.CODE_SUCCESS,
 		Msg:    "Success",
 		GameId: self.gameId,
 		Uid:    req.GetUid(),
@@ -340,4 +344,27 @@ func (self *GameMatch) LoginHallRequest(reply string, req *pb.LoginHallRequest) 
 }
 func (self *GameMatch) Quit() {
 	self.exit <- true
+}
+
+func (self *GameMatch) GetAiInfo() *domain.AiInfo {
+	aiSetKey := "AI_UID_PID_SET_KEY"
+	aiHKey := "AI_UID_PID_H_KEY"
+	uid, err := self.RedisDao.SRandMember(aiSetKey)
+	if err != nil || uid == "" {
+		self.log.Error("GetAiInfo err: %v", err)
+		return nil
+	}
+
+	pid, err := self.RedisDao.HGet(aiHKey, uid)
+	if err != nil {
+		self.log.Error("GetAiInfo err: %v", err)
+		return nil
+	}
+
+	res := &domain.AiInfo{
+		Uid: uid,
+		Pid: pid,
+	}
+
+	return res
 }

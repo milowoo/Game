@@ -5,9 +5,11 @@ package match
 */
 
 import (
+	"encoding/json"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
+	"match/src/domain"
 	"match/src/log"
 )
 
@@ -98,7 +100,6 @@ func (self *SubscribeGame) SubscribeGame(gameId string) {
 
 	self.Client.Subscribe(subscribeParam)
 	self.SubGameMap[gameId] = subscribeParam
-
 }
 
 func (self *SubscribeGame) procGameDown(data string) {
@@ -109,17 +110,38 @@ func (self *SubscribeGame) procGameDown(data string) {
 
 	for _, service := range *services {
 		//服务不可使用， 则需要
-		if !service.Valid {
-			self.procGameRoom(service)
+		self.procGameHall(service)
+	}
+}
+
+func (self *SubscribeGame) procGameHall(service model.Service) {
+	//取出所有的 down 处理的所有房间， 重新分配
+	self.log.Info("procGameRoom service %+v", service)
+	for _, instance := range service.Hosts {
+		self.log.Info("procGameRoom host %+v", instance)
+		if !instance.Enable {
+			redisKey := "game." + instance.Ip
+			result, err := self.Server.RedisDao.SMembers(redisKey)
+			if err != nil {
+				self.log.Error("failed to query redis key:%+v err:%+v", redisKey, err)
+				continue
+			}
+			for _, v := range result {
+				var data domain.HallData
+				json.Unmarshal([]byte(v), &data)
+				gameMatch := self.Server.MatchMgr[data.GameId]
+				if gameMatch != nil {
+					RunOnMatch(gameMatch.MsgFromNats, gameMatch, func(gameMatch *GameMatch) {
+						gameMatch.PublicCreateRoom(data.RoomId)
+					})
+				}
+
+			}
 		}
 	}
 }
 
-func (self *SubscribeGame) procGameRoom(model.Service) {
-	//取出所有的 down 处理的所有房间， 重新分配
-}
-
-func (self *SubscribeGame) OnQuit() {
+func (self *SubscribeGame) Quit() {
 	if self.isQuit {
 		return
 	}

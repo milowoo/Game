@@ -54,7 +54,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 		return nil, err
 	}
 
-	g_Server.ConfigClient, err = g_Server.InitNacos(config)
+	g_Server.ConfigClient, g_Server.NameClient, err = g_Server.InitNacos(config)
 	if err != nil {
 		log.Error("nacos 连接失败", err)
 		return nil, err
@@ -65,12 +65,14 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	g_Server.NatsService = NewNatsService(g_Server)
 
+	g_Server.SubscribeGame = NewSubscribeGame(g_Server)
+
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
 
 	return g_Server, nil
 }
 
-func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, error) {
+func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, naming_client.INamingClient, error) {
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(config.NacosConfig.Ip, config.NacosConfig.Port, constant.WithContextPath("/nacos")),
 	}
@@ -94,12 +96,26 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 	)
 
 	if err != nil {
-		log.Error("nacos 连接失败 %+v", err)
+		log.Error("nacos config 连接失败 %+v", err)
 		panic(err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return configClient, nil
+	// create naming client
+	client, err := clients.NewNamingClient(
+		vo.NacosClientParam{
+			ClientConfig:  &cc,
+			ServerConfigs: sc,
+		},
+	)
+
+	if err != nil {
+		log.Error("nacos name  连接失败 %+v", err)
+		panic(err)
+		return nil, nil, err
+	}
+
+	return configClient, client, nil
 }
 
 // 通知服务器退出
@@ -115,6 +131,8 @@ func (self *Server) Quit() {
 	for _, gameMath := range self.MatchMgr {
 		gameMath.Quit()
 	}
+	self.SubscribeGame.Quit()
+
 	self.isQuit = true
 
 	self.WaitGroup.Done()

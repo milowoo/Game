@@ -22,7 +22,6 @@ func main() {
 	if err != nil {
 		initLog.Error("new server err, %+v", err)
 	}
-
 	server.Run()
 
 	c := make(chan os.Signal)
@@ -30,6 +29,6 @@ func main() {
 	go func() {
 		<-c
 		initLog.Warn("exit svr by signal ...")
-		server.OnQuit()
+		server.Quit()
 	}()
 }

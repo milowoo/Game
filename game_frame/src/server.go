@@ -2,6 +2,8 @@ package game_frame
 
 import (
 	"game_frame/src/log"
+	"game_frame/src/mq"
+	"game_frame/src/redis"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
@@ -11,8 +13,6 @@ import (
 	"os/signal"
 	"sync"
 )
-import "game_frame/src/mq"
-import "game_frame/src/redis"
 
 var g_Server *Server
 
@@ -54,7 +54,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	g_Server.NatsPool = pool
 
-	g_Server.ConfigClient, err = g_Server.InitNacos(config)
+	g_Server.ConfigClient, g_Server.NameClient, err = g_Server.InitNacos(config)
 	if err != nil {
 		log.Error("nacos 连接失败", err)
 		return nil, err
@@ -78,10 +78,9 @@ func (self *Server) Quit() {
 	}
 
 	self.isQuit = true
-	self.DynamicConfig.Quit()
 	self.NatsService.Quit()
 	self.RoomMgr.Quit()
-
+	self.DynamicConfig.Quit()
 	self.WaitGroup.Done()
 }
 
@@ -111,7 +110,7 @@ func (self *Server) Run() {
 	self.Join()
 }
 
-func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, error) {
+func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, naming_client.INamingClient, error) {
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(config.NacosConfig.Ip, config.NacosConfig.Port, constant.WithContextPath("/nacos")),
 	}
@@ -133,12 +132,47 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 			ServerConfigs: sc,
 		},
 	)
+	if err != nil {
+		log.Error("nacos 连接失败 %+v", err)
+		panic(err)
+		return nil, nil, err
+	}
+
+	// create naming client
+	client, err := clients.NewNamingClient(
+		vo.NacosClientParam{
+			ClientConfig:  &cc,
+			ServerConfigs: sc,
+		},
+	)
 
 	if err != nil {
 		log.Error("nacos 连接失败 %+v", err)
 		panic(err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return configClient, nil
+	//Register
+	param := vo.RegisterInstanceParam{
+		Ip:          GetHostIp(),
+		Port:        config.NacosConfig.Port,
+		ServiceName: config.GameId,
+		GroupName:   config.NacosConfig.GameGroup,
+		ClusterName: "cluster-a",
+		Weight:      10,
+		Enable:      true,
+		Healthy:     true,
+		Ephemeral:   true,
+		Metadata:    map[string]string{"idc": "shanghai"},
+	}
+
+	success, err := client.RegisterInstance(param)
+	if !success || err != nil {
+		panic("RegisterServiceInstance failed!" + err.Error())
+		return nil, nil, err
+	}
+
+	log.Error("RegisterServiceInstance,param:%+v,result:%+v ", param, success)
+
+	return configClient, client, nil
 }

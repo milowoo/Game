@@ -2,7 +2,9 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-redis/redis/v8"
+	"math/rand"
 	"strings"
 	"time"
 )
@@ -76,6 +78,19 @@ func (s *RedisDao) SMembers(key string) ([]string, error) {
 
 func (s *RedisDao) SREM(key string, members ...interface{}) error {
 	return s.client.SRem(s.ctx, key, members...).Err()
+}
+
+// SRandMember 获取集合中的一个随机成员，但不从集合中删除
+func (r *RedisDao) SRandMember(key string) (string, error) {
+	members, err := r.SMembers(key)
+	if err != nil {
+		return "", err
+	}
+	if len(members) == 0 {
+		return "", fmt.Errorf("no members in the set")
+	}
+	rand.Seed(time.Now().UnixNano())
+	return members[rand.Intn(len(members))], nil
 }
 
 // HGet 获取哈希表中指定字段的值

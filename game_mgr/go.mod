@@ -5,11 +5,9 @@ go 1.21
 toolchain go1.22.4
 
 require (
-	github.com/FZambia/sentinel v1.1.1
 	github.com/go-ini/ini v1.55.0
 	github.com/go-redis/redis/v8 v8.11.0
 	github.com/gogo/protobuf v1.3.2
-	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/nacos-group/nacos-sdk-go/v2 v2.1.1
 	github.com/nats-io/go-nats v1.7.2
 	google.golang.org/protobuf v1.34.2

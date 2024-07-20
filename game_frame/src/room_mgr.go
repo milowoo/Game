@@ -1,6 +1,7 @@
 package game_frame
 
 import (
+	"game_frame/src/constants"
 	"game_frame/src/handler"
 	"game_frame/src/log"
 	"game_frame/src/pb"
@@ -14,8 +15,6 @@ import (
 
 const (
 	RoomMgrFrameInterval = time.Millisecond * 500
-	LogRoomCountInterval = time.Second * 30
-	MatchTimeInterval    = time.Second * 5
 )
 
 type RoomMgr struct {
@@ -130,64 +129,58 @@ func (self *RoomMgr) ProcessGatewayRequest(reply string, msg *nats.Msg) {
 	var commonReq pb.GameCommonRequest
 	commonRes := &pb.GameCommonResponse{}
 	proto.Unmarshal(msg.Data, &commonReq)
-	if commonReq.GetGameId() != self.Server.Config.GameId {
+	head := commonReq.GetHead()
+	if head.GetGameId() != self.Server.Config.GameId {
 		self.Log.Error("ProcessGatewayRequest invalid nat data %+v ", msg.Data)
-		commonRes.Code = 101
+		commonRes.Code = constants.INVALID_BODY
 		commonRes.Msg = "Unmarshal request err"
-		commonRes.Timestamp = time.Now().Unix()
 		res, _ := proto.Marshal(commonRes)
 		self.Server.NatsPool.Publish(reply, res)
 		return
 	}
 
-	commonRes.Sn = commonReq.Sn
-	commonRes.ProtoName = commonReq.ProtoName
-
 	var request proto.Message
 	proto.Unmarshal(commonReq.GetData(), request)
-	//根据房间ID 查找 room 信息
-	room, ok := self.id2Room[commonReq.GetRoomId()]
-	if ok {
-		room.ApplyProtoHandler(commonRes, reply, commonReq.GetUid(), commonReq.GetProtoName(), request)
-		return
-	}
 
-	room = self.GetOrCreateRoom(commonReq.GetRoomId(), commonReq.GetProtoName())
+	room := self.GetOrCreateRoom(head)
 	if room == nil {
 		self.Log.Error("ProcessGatewayRequest invalid proto %+v gameId %+v uid %+v",
-			commonReq.GetProtoName(), commonReq.GetRoomId(), commonReq.GetUid())
+			head.ProtoName, head.GetRoomId(), head.GetUid())
 		return
 	}
 
-	room.ApplyProtoHandler(commonRes, reply, commonReq.GetUid(), commonReq.GetProtoName(), request)
+	RunOnRoom(room.MsgFromMgr, room, func(input *handler.Room) {
+		room.ApplyProtoHandler(reply, head, request)
+	})
+
 	return
 }
 
-func (self *RoomMgr) GetOrCreateRoom(roomId string, pbName string) *handler.Room {
+func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *handler.Room {
 	//先判断房间是否在使用中
-	room, ok := self.id2Room[roomId]
+	room, ok := self.id2Room[head.RoomId]
 	if ok {
 		return room
 	}
 
 	//如果不是进入房间/ 大厅的协议，就是非法的请求
-	if pbName != "pb.LoginHallRequest" && pbName != "pb.LoginRoomRequest" {
+	if head.ProtoName != "pb.LoginHallRequest" && head.ProtoName != "pb.LoginRoomRequest" {
 		return nil
 	}
 
-	room, err := handler.NewRoom(self, roomId)
+	room, err := handler.NewRoom(self, head.RoomId)
 	if err != nil {
-		self.Log.Error("big err create room err %s", roomId)
+		self.Log.Error("big err create room err %s", head.RoomId)
 		return nil
 	}
 
 	self.roomMutex.Lock()
-	checkRoom, ok := self.id2Room[roomId]
+	checkRoom, ok := self.id2Room[head.RoomId]
 	if ok {
 		return checkRoom
 	}
 
-	self.id2Room[roomId] = room
+	self.id2Room[head.RoomId] = room
 	self.roomMutex.Unlock()
 
 	go room.Run()

@@ -11,13 +11,26 @@ message PingRequest {
     int64 timestamp = 1; // 服务器时间戳
 }
 
-
-message GameCommonRequest{
+message CommonHead {
     string gameId = 1;
     string roomId = 2;
     string uid = 3;
-    string protoName = 4;
-    bytes data = 5;
+    int64  sn = 4;
+    int64  timestamp = 5;
+    string protoName = 6;
+}
+
+message GameCommonRequest{
+    CommonHead head = 1;
+    bytes data = 2;
+}
+
+
+message GameCommonResponse{
+    int32 code = 1;
+    string msg = 2;
+    CommonHead head = 3;
+    bytes data = 6;
 }
 
 

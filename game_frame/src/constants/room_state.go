@@ -1,7 +1,8 @@
 package constants
 
 const (
-	ROOM_STATE_LOAD              		 = "load"
-	ROOM_STATE_START               		= "start"
-	ROOM_STATE_FINISH                   = "finish"
+	ROOM_STATE_UNKNOWN = "unknown"
+	ROOM_STATE_LOAD    = "load"
+	ROOM_STATE_START   = "start"
+	ROOM_STATE_FINISH  = "finish"
 )

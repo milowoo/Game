@@ -2,43 +2,19 @@ package game_frame
 
 import (
 	"encoding/json"
+	"game_frame/src/domain"
 	"game_frame/src/log"
 	"game_frame/src/redis"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"time"
 )
-
-// 定义一个枚举类型
-type GameType int32
-
-// 使用 iota 定义枚举常量
-const (
-	UnKnow GameType = iota
-	Single
-	OneVOne
-	HallAndSingle
-	HallAnd1V1
-)
-
-type GameInfo struct {
-	GameId    string    `json:"gameId,omitempty"`
-	Type      int32     `json:"type,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Status    int32     `json:"status,omitempty"`
-	GameTime  int32     `json:"gameTime,omitempty"`
-	MatchTime int32     `json:"matchTime,omitempty"`
-	Operator  string    `json:"operator,omitempty"`
-	UTime     time.Time `bson:"utime" json:"utime"`
-	CTime     time.Time `bson:"ctime" json:"ctime"`
-}
 
 type DynamicConfig struct {
 	Server      *Server
 	NacosConfig *NacosConfig
 	redisDao    *redis.RedisDao
 	log         *log.Logger
-	GameInfo    *GameInfo
+	GameInfo    *domain.GameInfo
 	Client      config_client.IConfigClient
 	gameChange  chan string
 	exit        chan bool
@@ -104,9 +80,9 @@ func (self *DynamicConfig) Run() {
 func (self *DynamicConfig) syncGameData(gameId string) {
 	data, _ := self.redisDao.Get(gameId)
 	self.log.Info("syncGameData gameId %+v data %+v", gameId, data)
-	var gameInfo *GameInfo
+	var gameInfo domain.GameInfo
 	json.Unmarshal([]byte(data), &gameInfo)
-	self.GameInfo = gameInfo
+	self.GameInfo = &gameInfo
 
 }
 
@@ -114,6 +90,6 @@ func (self *DynamicConfig) Quit() {
 	self.exit <- true
 }
 
-func (self *DynamicConfig) GetGameInfo() *GameInfo {
+func (self *DynamicConfig) GetGameInfo() *domain.GameInfo {
 	return self.GameInfo
 }

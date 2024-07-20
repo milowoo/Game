@@ -1,7 +1,7 @@
 package mongo
 
 import (
-	"game_mgr/src"
+	"game_mgr/src/domain"
 	"game_mgr/src/log"
 	"time"
 
@@ -20,12 +20,12 @@ func NewMongoDao(dataSource *DataSource, log *log.Logger) *MongoDAO {
 }
 
 // 获取游戏信息
-func (dao *MongoDAO) GetGame(gameId string) (*game_mgr.GameInfo, error) {
+func (dao *MongoDAO) GetGame(gameId string) (*domain.GameInfo, error) {
 	session := dao.dataSource.GetSession()
 	defer session.Close()
 
 	c := session.DB(dao.dataSource.database).C("game")
-	m := game_mgr.GameInfo{}
+	m := domain.GameInfo{}
 	err := c.Find(&bson.M{"_id": gameId}).One(&m)
 	if err != nil {
 		dao.log.Debug("GetGame err %v uid %v ", err, gameId)
@@ -34,7 +34,7 @@ func (dao *MongoDAO) GetGame(gameId string) (*game_mgr.GameInfo, error) {
 	return &m, nil
 }
 
-func (dao *MongoDAO) InsertGame(game *game_mgr.GameInfo) error {
+func (dao *MongoDAO) InsertGame(game *domain.GameInfo) error {
 	game.UTime = time.Now()
 	game.CTime = time.Now()
 
@@ -82,13 +82,13 @@ func (dao *MongoDAO) DeleteGame(gameId string) error {
 	return nil
 }
 
-func (dao *MongoDAO) GetGameByTime(updateTime int64) ([]game_mgr.GameInfo, error) {
+func (dao *MongoDAO) GetGameByTime(updateTime int64) ([]domain.GameInfo, error) {
 	session := dao.dataSource.GetSession()
 	defer session.Close()
-	m := make([]game_mgr.GameInfo, 0)
+	m := make([]domain.GameInfo, 0)
 
 	c := session.DB(dao.dataSource.database).C("game")
-	var game game_mgr.GameInfo
+	var game domain.GameInfo
 	iter := c.Find(bson.M{"uTime": bson.M{"$gt": updateTime}}).Iter()
 	for iter.Next(&game) {
 		m = append(m, game)

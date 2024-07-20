@@ -4,6 +4,7 @@ import (
 	"github.com/nats-io/go-nats"
 	"strconv"
 	"ucenter/src"
+	"ucenter/src/constants"
 	"ucenter/src/log"
 	"ucenter/src/mq"
 )
@@ -57,7 +58,7 @@ func (self *HandlerMgr) GreateUid() string {
 
 func (self *HandlerMgr) SubscribeGetUid() {
 	// 订阅一个Nats Request 主题
-	err := self.NatsPool.SubscribeForRequest("ucenter.apply.uid", func(subj, reply string, msg interface{}) {
+	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
 		self.log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 
 		natsMsg, ok := msg.(*nats.Msg)
@@ -75,5 +76,6 @@ func (self *HandlerMgr) SubscribeGetUid() {
 }
 
 func (self *HandlerMgr) Quit() {
+	self.NatsPool.Unsubscribe(constants.UCENTER_APPLY_UID_SUBJECT)
 	self.exit <- true
 }

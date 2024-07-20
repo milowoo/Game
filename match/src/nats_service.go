@@ -80,7 +80,7 @@ func (self *NatsService) subscribeLoginHallRequest() {
 			if gameMatch == nil {
 				self.log.Error("subscribeLoginHallRequest gameId %+v not found", request.GetGameId())
 				response := &pb.LoginHallResponse{
-					Code: 102,
+					Code: constants.INVALID_GAME_ID,
 					Msg:  "invalid gameId",
 				}
 

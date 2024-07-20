@@ -20,13 +20,6 @@ const (
 	ROOM_WAITING_PLAYERS_READY_TIME = time.Second * 20
 )
 
-const (
-	ROOM_STATE_UNKNOWN               = "ROOM_STATE_UNKNOWN"
-	ROOM_STATE_WAITING_PLAYERS_READY = "ROOM_STATE_WAITING_PLAYERS_READY"
-	ROOM_STATE_RUNNING               = "ROOM_STATE_RUNNING"
-	ROOM_STATE_END                   = "ROOM_STATE_END"
-)
-
 type GamePlayer struct {
 	Uid             string
 	Pid             string
@@ -148,17 +141,16 @@ func NewRoom(roomMgr *game_frame.RoomMgr, RoomId string) (*Room, error) {
 	return self, nil
 }
 
-func (self *Room) ApplyProtoHandler(commonRes *pb.GameCommonResponse, reply string, uid string, p string, msg proto.Message) {
-	method, ok := self.protocol2Method[p]
+func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, msg proto.Message) {
+	method, ok := self.protocol2Method[head.ProtoName]
 	if !ok {
-		self.Log.Info("method not found: %s", p)
+		self.Log.Info("method not found: %s", head.ProtoName)
 		return
 	}
 
 	in := []reflect.Value{
-		reflect.ValueOf(commonRes),
 		reflect.ValueOf(reply),
-		reflect.ValueOf(uid),
+		reflect.ValueOf(head),
 		reflect.ValueOf(msg),
 	}
 	method.Call(in)
@@ -211,14 +203,18 @@ func (self *Room) SaveAndQuit() {
 
 }
 
-func (self *Room) ResponseGateway(commonRes *pb.GameCommonResponse, reply string, response proto.Message) {
-	commonRes.Timestamp = time.Now().Unix()
-	if commonRes.Code == 0 {
-		commonRes.Data, _ = proto.Marshal(response)
+func (self *Room) ResponseGateway(reply string, head *pb.CommonHead, response proto.Message) {
+	head.Timestamp = time.Now().Unix()
+	bytes, _ := proto.Marshal(response)
+	res := &pb.GameCommonResponse{
+		Code: constants.CODE_SUCCESS,
+		Msg:  "",
+		Head: head,
+		Data: bytes,
 	}
 
-	bytes, _ := proto.Marshal(commonRes)
-	self.RoomMgr.Server.NatsPool.Publish(reply, bytes)
+	commBytes, _ := proto.Marshal(res)
+	self.RoomMgr.Server.NatsPool.Publish(reply, commBytes)
 }
 
 // 房间内广播处理

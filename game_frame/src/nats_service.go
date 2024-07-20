@@ -1,6 +1,7 @@
 package game_frame
 
 import (
+	"game_frame/src/constants"
 	"game_frame/src/log"
 	"game_frame/src/mq"
 	"github.com/nats-io/go-nats"
@@ -22,6 +23,8 @@ type NatsService struct {
 }
 
 func NewNatsService(server *Server) *NatsService {
+	matchSubject := constants.GetCreateRoomNoticeSubject(server.Config.GameId, server.Config.GroupName)
+	gmSubject := constants.GetGmCodeSubject(server.Config.GameId)
 	return &NatsService{
 		Server:                 server,
 		log:                    server.Log,
@@ -32,8 +35,8 @@ func NewNatsService(server *Server) *NatsService {
 		matchData:              make(chan []byte, 1024),
 		gmData:                 make(chan []byte, 128),
 		roomSubjectMap:         make(map[string]int32),
-		matchCreateRoomSubject: "create.room.notice." + server.Config.GameId,
-		gmSubject:              "game.gm.code" + server.Config.GameId,
+		matchCreateRoomSubject: matchSubject,
+		gmSubject:              gmSubject,
 		exit:                   make(chan bool, 1),
 	}
 }
@@ -89,7 +92,7 @@ func (self *NatsService) subscribeMatch() {
 
 func (self *NatsService) ProcessCreateRoom(roomId string) {
 	//对房间进行监听， 处理gateway的消息 "game." + server.Config.GameId + ".*",
-	subject := self.getRoomSubject(roomId)
+	subject := constants.GetGameSubject(self.GameId, roomId)
 	self.roomSubjectMap[roomId] = 1
 	//监听gateway请求数据
 	self.subscribeGateway(subject)

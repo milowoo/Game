@@ -4,29 +4,17 @@ import (
 	"encoding/json"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
+	"match/src/domain"
 	"match/src/log"
 	"match/src/redis"
-	"time"
 )
-
-type GameInfo struct {
-	GameId    string    `json:"gameId,omitempty"`
-	Type      int32     `json:"type,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Status    int32     `json:"status,omitempty"`
-	GameTime  int32     `json:"gameTime,omitempty"`
-	MatchTime int32     `json:"matchTime,omitempty"`
-	Operator  string    `json:"operator,omitempty"`
-	UTime     time.Time `bson:"utime" json:"utime"`
-	CTime     time.Time `bson:"ctime" json:"ctime"`
-}
 
 type DynamicConfig struct {
 	Server      *Server
 	NacosConfig *NacosConfig
 	redisDao    *redis.RedisDao
 	log         *log.Logger
-	GameMap     map[string]*GameInfo
+	GameMap     map[string]*domain.GameInfo
 	Client      config_client.IConfigClient
 	gameChange  chan string
 	exit        chan bool
@@ -38,7 +26,7 @@ func NewDynamicConfig(server *Server) *DynamicConfig {
 		redisDao:    server.RedisDao,
 		NacosConfig: server.Config.NacosConfig,
 		log:         server.Log,
-		GameMap:     make(map[string]*GameInfo),
+		GameMap:     make(map[string]*domain.GameInfo),
 		Client:      server.ConfigClient,
 		gameChange:  make(chan string, 100),
 		exit:        make(chan bool, 1),
@@ -113,13 +101,13 @@ func (self *DynamicConfig) loadAllGameData() {
 func (self *DynamicConfig) syncGameData(gameId string) {
 	data, _ := self.redisDao.Get(gameId)
 	self.log.Info("syncGameData gameId %+v data %+v", gameId, data)
-	var gameInfo *GameInfo
+	var gameInfo domain.GameInfo
 	json.Unmarshal([]byte(data), &gameInfo)
-	self.GameMap[gameId] = gameInfo
+	self.GameMap[gameId] = &gameInfo
 
 }
 
-func (self *DynamicConfig) GetAllGame() map[string]*GameInfo {
+func (self *DynamicConfig) GetAllGame() map[string]*domain.GameInfo {
 	return self.GameMap
 }
 
@@ -127,6 +115,6 @@ func (self *DynamicConfig) Quit() {
 	self.exit <- true
 }
 
-func (self *DynamicConfig) GetGameInfo(gameId string) *GameInfo {
+func (self *DynamicConfig) GetGameInfo(gameId string) *domain.GameInfo {
 	return self.GameMap[gameId]
 }
