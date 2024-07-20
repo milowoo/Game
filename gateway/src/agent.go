@@ -73,6 +73,7 @@ type Agent struct {
 	Uid                  string
 	RoomId               string
 	GameId               string
+	GroupName            string
 	GameSubject          string
 	Counter              *AtomicCounter
 }
@@ -103,6 +104,7 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		Uid:                  "",
 		RoomId:               "",
 		GameId:               "",
+		GroupName:            "",
 		GameSubject:          "",
 		RequestGameErrFrame:  0,
 		Counter:              &AtomicCounter{},
@@ -492,6 +494,11 @@ func (self *Agent) checkGameException() {
 		return
 	}
 	if self.RequestGameErrFrame < self.FrameID-int(CheckGameExceptionInternal/AgentFrameInterval) {
+		//如果是在大厅，则需要游戏服创建大厅
+		if self.InHall == 1 {
+			handler.LonginHallRequestMatch(self)
+			return
+		}
 		self.notifyLostAgent(false)
 
 		self.Log.Info("checkInvalidAgent uid %v delayDisconnect: ping timeout", self.Uid)

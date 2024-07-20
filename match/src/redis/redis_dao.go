@@ -67,7 +67,7 @@ func (s *RedisDao) SAdd(key string, members ...interface{}) error {
 	return s.client.SAdd(s.ctx, key, members...).Err()
 }
 
-func (s *RedisDao) SISMMBER(key string, val interface{}, members interface{}) (bool, error) {
+func (s *RedisDao) SISMMBER(key string, members interface{}) (bool, error) {
 	return s.client.SIsMember(s.ctx, key, members).Result()
 }
 

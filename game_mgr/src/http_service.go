@@ -148,7 +148,7 @@ func (self *HttpService) listenHttpServer() {
 			handler.AddAiHandler(self, body, w)
 		case "addColoredUidList":
 			//增加活动染色用户
-			handler.AddAiHandler(self, body, w)
+			handler.AddColoredUidHandler(self, body, w)
 		case "deleteColoredUidList":
 			//删除活动染色用户
 			handler.DeleteColoredUidHandler(self, body, w)

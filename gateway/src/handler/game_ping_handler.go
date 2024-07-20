@@ -12,10 +12,6 @@ import (
 */
 
 func GamePing(agent *gateway.Agent) {
-	if len(agent.GameSubject) < 1 {
-		return
-	}
-
 	request := &pb.PingRequest{
 		Timestamp: time.Now().Unix(),
 	}

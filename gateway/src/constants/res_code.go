@@ -8,6 +8,7 @@ const (
 	INVALID_GAME_ID      = 103
 	GAME_IS_OFF          = 104
 	SYSTEM_ERROR         = 105
+	INVALID_REQUEST      = 106
 
 	//  1000 - 2000  gateway
 	INVALID_TIME       = 1001
