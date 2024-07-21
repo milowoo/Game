@@ -47,15 +47,13 @@ message LoginResponse {
     int32 reconnect = 5;
 }
 
-//进入大厅
-message ClientLoginHallRequest{
-
+// 进入大厅
+message LoginHallRequest {
 }
 
-
-//进入大厅
-message ClientLoginHallResponse{
-    int32 code = 1;
+// 进入大厅应答
+message LoginHallResponse {
+    int32 code  =1 ;
     string msg = 2;
 }
 
@@ -63,6 +61,7 @@ message JumpGameRoomNoticeRes {
     string roomId = 1;
     string opt = 2;
 }
+
 
 message ClientMatchRequest {
 }
@@ -91,6 +90,18 @@ message ClientMatchOverRes {
     string opt = 4;             // 透传字段
     repeated string uidList = 5;  //匹配玩家信息
     repeated string aiUidList = 6;  //ai Uid
+}
+
+
+// 进入房间
+message LoginRoomRequest {
+    int64 timestamp = 1;
+}
+
+// 进入房间应答
+message LoginRoomResponse {
+    int32 code  =1 ;
+    string msg = 2;
 }
 
 message LoadProgressRequest {

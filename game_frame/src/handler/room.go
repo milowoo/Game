@@ -5,6 +5,7 @@ import (
 	"game_frame/src"
 	"game_frame/src/constants"
 	"game_frame/src/log"
+	"game_frame/src/mq"
 	"game_frame/src/pb"
 	"game_frame/src/redis"
 	"github.com/gogo/protobuf/proto"
@@ -24,7 +25,8 @@ type GamePlayer struct {
 	Uid             string
 	Pid             string
 	RoomId          string
-	HallId          string //到玩法服才有效
+	HallId          string
+	GatewayIp       string
 	LoadingProgress int32
 	TotalUseTime    int
 	Score           int
@@ -32,12 +34,13 @@ type GamePlayer struct {
 	IsNewPlayer     bool
 }
 
-func NewPlayer(roomId string, uid string, pid string, isAi bool) *GamePlayer {
+func NewPlayer(roomId string, uid string, pid string, hostIp string, isAi bool) *GamePlayer {
 	p := &GamePlayer{
-		Uid:    uid,
-		Pid:    pid,
-		RoomId: roomId,
-		HallId: "",
+		Uid:       uid,
+		Pid:       pid,
+		RoomId:    roomId,
+		HallId:    "",
+		GatewayIp: hostIp,
 
 		IsAi:            isAi,
 		IsNewPlayer:     false,
@@ -54,9 +57,10 @@ type Room struct {
 	DynamicConfig *game_frame.DynamicConfig
 
 	RedisDao *redis.RedisDao
-
-	RoomMgr *game_frame.RoomMgr
-	Log     *log.Logger
+	RoomMgr  *game_frame.RoomMgr
+	NatPool  *mq.NatsPool
+	Log      *log.Logger
+	Counter  *game_frame.AtomicCounter
 
 	frameId        int
 	gameRunFrameId int //游戏运行的帧数
@@ -98,6 +102,7 @@ func NewRoom(roomMgr *game_frame.RoomMgr, RoomId string) (*Room, error) {
 	now := time.Now()
 	self := &Room{
 		RoomMgr:       roomMgr,
+		NatPool:       roomMgr.Server.NatsPool,
 		RedisDao:      roomMgr.RedisDao,
 		GlobalConfig:  roomMgr.GlobalConfig,
 		DynamicConfig: roomMgr.DynamicConfig,
@@ -118,6 +123,8 @@ func NewRoom(roomMgr *game_frame.RoomMgr, RoomId string) (*Room, error) {
 		WinUid:      "",
 
 		MsgFromMgr: make(chan game_frame.Closure, 1024*10),
+
+		Counter: &game_frame.AtomicCounter{},
 
 		IsAi:   false,
 		isInit: false,
@@ -219,11 +226,61 @@ func (self *Room) ResponseGateway(reply string, head *pb.CommonHead, response pr
 
 // 房间内广播处理
 func (self *Room) RoomBroadcast(msg proto.Message) {
-	//for _, player := range self.players {
-	//	if player.IsAi {
-	//		continue
-	//	}
-	//
-	//	player.Ctx.SendInRoomPB(player.Uid, msg)
-	//}
+	for _, player := range self.Players {
+		self.Send2PlayerMessage(player, msg)
+	}
+}
+
+func (self *Room) Send2PlayerMessage(player *GamePlayer, msg proto.Message) {
+	if player.IsAi {
+		return
+	}
+
+	typ := reflect.TypeOf(msg)
+	protoName := typ.Elem().Name()
+	bytes, _ := proto.Marshal(msg)
+
+	head := &pb.PushHead{
+		Uid:       player.Uid,
+		GameId:    self.GlobalConfig.GameId,
+		Pid:       player.Pid,
+		Timestamp: time.Now().Unix(),
+		RoomId:    self.RoomId,
+		ProtoName: protoName,
+		Sn:        self.Counter.GetIncrementValue(),
+	}
+
+	data := &pb.GamePushMessage{
+		Head: head,
+		Data: bytes,
+	}
+	res, _ := proto.Marshal(data)
+	self.NatPool.Publish(constants.GetGamePushDataSubject(player.GatewayIp), res)
+}
+
+func (self *Room) IsFirstLogin(uid string) bool {
+	if len(self.Players) == 0 {
+		return true
+	}
+	for _, player := range self.Players {
+		if player.Uid == uid {
+			return false
+		}
+	}
+
+	return true
+}
+
+/*
+*
+获取竞争对手
+*/
+func (self *Room) GetRival(uid string) *GamePlayer {
+	for _, player := range self.Players {
+		if player.Uid != uid {
+			return player
+		}
+	}
+
+	return nil
 }

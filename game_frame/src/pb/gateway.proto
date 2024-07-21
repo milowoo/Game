@@ -12,9 +12,12 @@ message CommonHead {
     string gameId = 1;
     string roomId = 2;
     string uid = 3;
-    int64  sn = 4;
-    int64  timestamp = 5;
-    string protoName = 6;
+    string pid = 4;
+    int64  sn = 5;
+    int64  timestamp = 6;
+    string protoName = 7;
+    string hostIp   = 8;
+
 }
 
 message GameCommonRequest{
@@ -28,6 +31,21 @@ message GameCommonResponse{
     string msg = 2;
     CommonHead head = 3;
     bytes data = 6;
+}
+
+message PushHead {
+    string gameId = 1;
+    string roomId = 2;
+    string uid = 3;
+    string pid = 4;
+    int64  sn = 5;
+    int64  timestamp = 6;
+    string protoName = 7;
+}
+
+message GamePushMessage{
+    PushHead head = 1;
+    bytes data = 2;
 }
 
 
