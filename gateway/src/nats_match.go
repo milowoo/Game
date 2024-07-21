@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"gateway/src/constants"
 	"gateway/src/log"
 	"gateway/src/mq"
 	"gateway/src/pb"
@@ -12,8 +13,6 @@ import (
 type NatsMatch struct {
 	Server         *Server
 	log            *log.Logger
-	matchSubject   string
-	cancelSubject  string
 	receiveSubject string
 	NatsPool       *mq.NatsPool
 	MsgFromServer  chan Closure
@@ -25,11 +24,9 @@ func NewNatsMatch(sever *Server) *NatsMatch {
 	return &NatsMatch{
 		Server:         sever,
 		log:            sever.Log,
-		matchSubject:   "match.req",
-		cancelSubject:  "match.cancel.req",
 		NatsPool:       sever.NatsPool,
 		MsgFromServer:  make(chan Closure, 2*1024),
-		receiveSubject: "match.response." + GetHostIp(),
+		receiveSubject: constants.GetMatchResultSubject(GetHostIp()),
 		exit:           make(chan bool, 1),
 		isQuit:         true,
 	}
@@ -47,7 +44,7 @@ func (self *NatsMatch) MatchRequest(gameId string, uid string, score int32, opt 
 
 	request, _ := proto.Marshal(matchReq)
 
-	err := self.NatsPool.Publish(self.matchSubject, request)
+	err := self.NatsPool.Publish(constants.MATCH_SUBJECT, request)
 	if err != nil {
 		self.log.Error("MatchRequest gameId %+v uid %+v match err %+v", err)
 		return err
@@ -55,11 +52,11 @@ func (self *NatsMatch) MatchRequest(gameId string, uid string, score int32, opt 
 	return nil
 }
 
-func (self *NatsMatch) MatchResponse() {
+func (self *NatsMatch) SubjectMatchResponse() {
 	self.NatsPool.Subscribe(self.receiveSubject, func(mess *nats.Msg) {
 		var matchOverRes pb.MatchOverRes
 		_ = proto.Unmarshal(mess.Data, &matchOverRes)
-		self.log.Info("MatchResponse %+v", matchOverRes)
+		self.log.Info("SubjectMatchResponse %+v", matchOverRes)
 		// uid 找出对应的 agent 进行匹配结果处理
 		self.Server.AgentMgr.MatchResponse(&matchOverRes)
 	})
@@ -72,7 +69,7 @@ func (self *NatsMatch) CancelMatchRequest(gameId string, uid string) error {
 	}
 
 	request, _ := proto.Marshal(matchReq)
-	err := self.NatsPool.Publish(self.cancelSubject, request)
+	err := self.NatsPool.Publish(constants.CANCEL_MATCH_SUBJECT, request)
 	if err != nil {
 		self.log.Error("MatchRequest gameId %+v uid %+v match err %+v", err)
 		return err
@@ -87,6 +84,8 @@ func (self *NatsMatch) Run() {
 			self.log.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
+
+	self.SubjectMatchResponse()
 
 	self.Server.WaitGroup.Add(1)
 	defer func() {

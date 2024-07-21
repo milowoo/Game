@@ -73,7 +73,6 @@ type Agent struct {
 	Uid                  string
 	RoomId               string
 	GameId               string
-	GroupName            string
 	GameSubject          string
 	Counter              *AtomicCounter
 }
@@ -104,7 +103,6 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		Uid:                  "",
 		RoomId:               "",
 		GameId:               "",
-		GroupName:            "",
 		GameSubject:          "",
 		RequestGameErrFrame:  0,
 		Counter:              &AtomicCounter{},
@@ -496,7 +494,7 @@ func (self *Agent) checkGameException() {
 	if self.RequestGameErrFrame < self.FrameID-int(CheckGameExceptionInternal/AgentFrameInterval) {
 		//如果是在大厅，则需要游戏服创建大厅
 		if self.InHall == 1 {
-			handler.LonginHallRequestMatch(self)
+			handler.LonginHall2Match(self)
 			return
 		}
 		self.notifyLostAgent(false)
@@ -564,6 +562,14 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 
 func (self *Agent) MatchResponse(res *pb.MatchOverRes) {
 	handler.MatchOverResponse(self, res)
+}
+
+func (self *Agent) ProcGamePushMessage(res *pb.GamePushMessage) {
+	head := res.GetHead()
+	self.Log.Info("ProcGamePushMessage gameId %+v uid %+v protoName %+v ", head.GetGameId(), head.GetUid(), head.GetProtoName())
+	var protoMessage proto.Message
+	proto.Unmarshal(res.GetData(), protoMessage)
+	self.ReplyClient(protoMessage)
 }
 
 func (self *Agent) ReplyClient(protoMsg proto.Message) {

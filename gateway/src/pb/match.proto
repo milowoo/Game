@@ -4,23 +4,22 @@ package pb;
 option go_package = "../pb";
 
 //进入大厅
-message LoginHallRequest{
+message CreateHallRequest{
   string gameId = 1;
-  string pid = 2;
-  string uid = 3;
+  string uid = 2;
 }
 
 
 //进入大厅应答
-message LoginHallResponse{
+message CreateHallResponse{
   int32 code = 1;
   string msg = 2;
   string gameId = 3;
-  string pid = 4;
-  string uid = 5;
-  string roomId = 6;
-  string groupName = 7;
+  string uid = 4;
+  string roomId = 5;
+  string gameIp = 6;
 }
+
 
 
 
@@ -68,12 +67,12 @@ message MatchOverRes {
   string uid = 4;
   string pid = 5;
   string roomId = 6;          // 新的roomId
-  string groupName = 7;
-  int64 timestamp = 8;        // 服务器时间戳（毫秒）
-  string opt = 9;             // 透传字段
-  string sign = 10;            // 签名
-  repeated MatchData uidList = 11;  //匹配玩家信息
-  repeated MatchData aiUidList = 12;  //ai Uid
+  int64 timestamp = 7;        // 服务器时间戳（毫秒）
+  string opt = 8;             // 透传字段
+  string sign = 9;            // 签名
+  repeated MatchData uidList = 10;  //匹配玩家信息
+  repeated MatchData aiUidList = 11;  //ai Uid
+  string gameIp = 12;
 }
 
 

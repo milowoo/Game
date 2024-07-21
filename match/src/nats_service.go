@@ -74,12 +74,12 @@ func (self *NatsService) subscribeLoginHallRequest() {
 
 		natsMsg, ok := msg.(*nats.Msg)
 		if ok {
-			var request pb.LoginHallRequest
+			var request pb.CreateHallRequest
 			proto.Unmarshal(natsMsg.Data, &request)
 			gameMatch := self.GameMatchMgr[request.GetGameId()]
 			if gameMatch == nil {
 				self.log.Error("subscribeLoginHallRequest gameId %+v not found", request.GetGameId())
-				response := &pb.LoginHallResponse{
+				response := &pb.CreateHallResponse{
 					Code: constants.INVALID_GAME_ID,
 					Msg:  "invalid gameId",
 				}

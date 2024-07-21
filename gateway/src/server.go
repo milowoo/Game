@@ -29,6 +29,7 @@ type Server struct {
 	NatsPool      *mq.NatsPool
 	MatchMgr      *NatsMatch
 	UCenterMgr    *NatsUCenter
+	NatsGame      *NatsGame
 	RedisDao      *redis.RedisDao
 	ConfigClient  config_client.IConfigClient
 
@@ -74,6 +75,8 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	g_Server.DynamicConfig = NewDynamicConfig(g_Server)
 
+	g_Server.NatsGame = NewNatsGame(g_Server)
+
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
 
 	return g_Server, nil
@@ -97,9 +100,13 @@ func (self *Server) Quit() {
 	self.StopWebsocketServer()
 
 	// 通知所有Quit强制存储，并退出；查询中的agent直接通知服务器关闭
+	self.NatsGame.Quit()
+
 	self.AgentMgr.Quit()
 
 	self.DynamicConfig.Quit()
+
+	self.MatchMgr.Quit()
 
 	self.WaitGroup.Done()
 }
@@ -191,13 +198,13 @@ func (self *Server) Run() {
 		self.Quit()
 	}
 
-	go self.AgentMgr.Run()
-
 	go self.DynamicConfig.Run()
+
+	go self.AgentMgr.Run()
 
 	go self.MatchMgr.Run()
 
-	go self.AgentMgr.Run()
+	go self.NatsGame.Run()
 
 	// wait exit
 	c := make(chan os.Signal)

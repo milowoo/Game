@@ -11,7 +11,6 @@ import (
 	"match/src/pb"
 	"match/src/redis"
 	"math/rand"
-	"reflect"
 	"strconv"
 	"time"
 )
@@ -140,17 +139,17 @@ func (self *GameMatch) Frame() {
 				uidList = append(uidList, secondUidData)
 
 				roomId := self.GenRoomId()
-				self.PublicCreateRoom(roomId)
-				self.Send2PlayerMatchRes(firstMatchReq, uidList, roomId)
-				self.Send2PlayerMatchRes(secondMatchReq, uidList, roomId)
+				gameIp := self.PublicCreateRoom(roomId)
+				self.Send2PlayerMatchRes(firstMatchReq, uidList, roomId, gameIp)
+				self.Send2PlayerMatchRes(secondMatchReq, uidList, roomId, gameIp)
 			} else {
 				//判断匹配时间
 				data, _ := self.RedisDao.RPop(self.redisKey)
 				matchReq := self.UnCompressed([]byte(data))
 				if matchReq.GetTimeStamp()+int64(self.GameInfo.MatchTime) > int64(time.Now().Unix()) {
 					roomId := self.GenRoomId()
-					self.PublicCreateRoom(roomId)
-					self.Send2PlayerWithAI(matchReq, roomId)
+					gameIp := self.PublicCreateRoom(roomId)
+					self.Send2PlayerWithAI(matchReq, roomId, gameIp)
 				} else {
 					self.RedisDao.LPush(self.redisKey, data)
 				}
@@ -163,44 +162,12 @@ func (self *GameMatch) Frame() {
 	}
 }
 
-func (self *GameMatch) PublicCreateRoom(roomId string) {
+func (self *GameMatch) PublicCreateRoom(roomId string) string {
 	subject := constants.GetCreateRoomNoticeSubject(self.GameInfo.GameId, self.GameInfo.GroupName)
-	self.Server.NatsPool.Publish(subject, []byte(roomId))
-}
-
-func (self *GameMatch) CheckGameRoomCreate(roomId, uid string) error {
-	request := &pb.PingRequest{
-		Timestamp: time.Now().Unix(),
-	}
-
-	typ := reflect.TypeOf(request)
-	protoName := typ.Elem().Name()
-
-	head := &pb.CommonHead{
-		GameId:    self.GameInfo.GameId,
-		Uid:       uid,
-		RoomId:    roomId,
-		Sn:        self.Counter.GetIncrementValue(),
-		Timestamp: time.Now().Unix(),
-		ProtoName: protoName,
-	}
-
-	bytes, _ := proto.Marshal(request)
-	commonRequest := &pb.GameCommonRequest{
-		Head: head,
-		Data: bytes,
-	}
-
-	comBytes, _ := proto.Marshal(commonRequest)
 	var response interface{}
-	subject := constants.GetGameSubject(self.GameInfo.GameId, roomId)
-	err := self.Server.NatsPool.Request(subject, comBytes, &response, 1*time.Second)
-	if err != nil {
-		self.log.Error("uid %v public to game game err %+v", uid, err)
-		return err
-	}
-
-	return nil
+	self.Server.NatsPool.Request(subject, []byte(roomId), response, 1*time.Second)
+	str, _ := response.(string)
+	return str
 }
 
 func (self *GameMatch) GenRoomId() string {
@@ -208,7 +175,7 @@ func (self *GameMatch) GenRoomId() string {
 	return self.gameId + "_room_" + strconv.FormatInt(roomId+1000, 10)
 }
 
-func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId string) {
+func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId string, gameIp string) {
 	uidList := make([]*pb.MatchData, 0)
 	matchData := &pb.MatchData{
 		Pid: matchReq.Pid,
@@ -228,32 +195,32 @@ func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId strin
 
 	aiList = append(aiList, aiData)
 	response := &pb.MatchOverRes{
-		Code:      100,
+		Code:      constants.CODE_SUCCESS,
 		Msg:       "Success",
 		GameId:    self.gameId,
 		Uid:       matchReq.GetUid(),
 		RoomId:    roomId,
 		Timestamp: time.Now().Unix(),
-		GroupName: self.GetGroupName(matchReq.GetUid()),
 		UidList:   uidList,
 		AiUidList: aiList,
+		GameIp:    gameIp,
 	}
 
 	res, _ := proto.Marshal(response)
 	self.Server.NatsPool.Publish(matchReq.GetReceiveSubject(), res)
 }
 
-func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []*pb.MatchData, roomId string) {
+func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []*pb.MatchData, roomId string, gameIp string) {
 	response := &pb.MatchOverRes{
-		Code:      100,
+		Code:      constants.CODE_SUCCESS,
 		Msg:       "Success",
 		GameId:    self.gameId,
 		Uid:       matchReq.GetUid(),
 		RoomId:    roomId,
-		GroupName: self.GetGroupName(matchReq.GetUid()),
 		Timestamp: time.Now().Unix(),
 		UidList:   uidList,
 		AiUidList: make([]*pb.MatchData, 0),
+		GameIp:    gameIp,
 	}
 
 	res, _ := proto.Marshal(response)
@@ -369,17 +336,20 @@ func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
 	}
 }
 
-func (self *GameMatch) LoginHallRequest(reply string, req *pb.LoginHallRequest) {
+func (self *GameMatch) LoginHallRequest(reply string, req *pb.CreateHallRequest) {
 	roomId := self.gameId + "_hall_" + req.GetUid()
-	response := &pb.LoginHallResponse{
+
+	gameIp := self.PublicCreateRoom(roomId)
+
+	response := &pb.CreateHallResponse{
 		Code:   constants.CODE_SUCCESS,
 		Msg:    "Success",
 		GameId: self.gameId,
 		Uid:    req.GetUid(),
 		RoomId: roomId,
+		GameIp: gameIp,
 	}
 
-	self.PublicCreateRoom(roomId)
 	res, _ := proto.Marshal(response)
 	self.Server.NatsPool.Publish(reply, res)
 }
@@ -387,6 +357,10 @@ func (self *GameMatch) Quit() {
 	self.exit <- true
 }
 
+/*
+*
+获取用户所在的分区， 如果是染色用户， 就根据染色设置，否则就是 game-info的分区
+*/
 func (self *GameMatch) GetGroupName(uid string) string {
 	//判断是否是染色用户
 	groupName := self.GameInfo.GroupName

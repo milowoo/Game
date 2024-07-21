@@ -116,3 +116,27 @@ func (self *AgentMgr) MatchResponse(res *pb.MatchOverRes) {
 	})
 
 }
+
+func (self *AgentMgr) GamePushDataNotice(res *pb.GamePushMessage) {
+	//找出对应的agent
+	head := res.GetHead()
+	agent := self.uid2Agent[head.GetUid()]
+	if agent == nil {
+		self.Log.Error("GamePushDataNotice uid %+v not exist", head.GetUid())
+		//找不到agent, 说明已经断开链接
+		return
+	}
+
+	//校验是否是同一款游戏
+	if agent.GameId != head.GetGameId() {
+		self.Log.Error("GamePushDataNotice uid %+v game no equal agent gameId %+v push gameId %+v ",
+			head.GetUid(), agent.GameId, head.GameId)
+		//找不到agent, 说明已经断开链接
+		return
+	}
+
+	RunOnAgent(agent.MsgFromAgentMgr, agent, func(agent *Agent) {
+		agent.ProcGamePushMessage(res)
+	})
+
+}

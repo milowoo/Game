@@ -23,6 +23,7 @@ func ForwardClientRequest(agent *gateway.Agent, protoName string, request proto.
 		RoomId:    agent.RoomId,
 		Sn:        agent.Counter.GetIncrementValue(),
 		ProtoName: protoName,
+		HostIp:    gateway.GetHostIp(),
 	}
 
 	commonRequest := &pb.GameCommonRequest{

@@ -43,7 +43,7 @@ func LoginHallRequest(agent *gateway.Agent) {
 		}
 	}
 
-	if LonginHallRequestMatch(agent) != nil {
+	if LonginHall2Match(agent) != nil {
 		agent.Log.Warn("LoginHallRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
 		LoginHallResponse(agent, constants.SYSTEM_ERROR, "system err")
 		return
@@ -52,11 +52,10 @@ func LoginHallRequest(agent *gateway.Agent) {
 	LoginHallResponse(agent, 0, "success")
 }
 
-func LonginHallRequestMatch(agent *gateway.Agent) error {
-	reqeust := pb.LoginHallRequest{
+func LonginHall2Match(agent *gateway.Agent) error {
+	reqeust := pb.CreateHallRequest{
 		Uid:    agent.Uid,
 		GameId: agent.GameId,
-		Pid:    agent.Pid,
 	}
 
 	bytes, _ := proto.Marshal(&reqeust)
@@ -65,7 +64,7 @@ func LonginHallRequestMatch(agent *gateway.Agent) error {
 	//发起进入大厅请求
 	agent.Server.NatsPool.Request(agent.GameId, bytes, response, 2*time.Second)
 	data, _ := response.(*nats.Msg)
-	var res pb.LoginHallResponse
+	var res pb.CreateHallResponse
 	err := proto.Unmarshal(data.Data, &res)
 	if err != nil {
 		agent.Log.Error("LonginHallRequestMatch err %+v", err)
@@ -73,9 +72,12 @@ func LonginHallRequestMatch(agent *gateway.Agent) error {
 	}
 
 	agent.RoomId = res.GetRoomId()
-	agent.GroupName = res.GetGroupName()
-	agent.GameSubject = constants.GetGameSubject(agent.GameId, agent.RoomId)
+	agent.GameSubject = constants.GetGameSubject(agent.GameId, res.GetGameIp())
 	return nil
+}
+
+func LoginHall2Game(agent *gateway.Agent) {
+
 }
 
 func LoginHallResponse(agent *gateway.Agent, code int32, msg string) {

@@ -5,11 +5,9 @@ package match
 */
 
 import (
-	"encoding/json"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"match/src/domain"
 	"match/src/log"
 )
 
@@ -120,23 +118,7 @@ func (self *SubscribeGame) procGameHall(service model.Service) {
 	for _, instance := range service.Hosts {
 		self.log.Info("procGameRoom host %+v", instance)
 		if !instance.Enable {
-			redisKey := "game." + instance.Ip
-			result, err := self.Server.RedisDao.SMembers(redisKey)
-			if err != nil {
-				self.log.Error("failed to query redis key:%+v err:%+v", redisKey, err)
-				continue
-			}
-			for _, v := range result {
-				var data domain.HallData
-				json.Unmarshal([]byte(v), &data)
-				gameMatch := self.Server.MatchMgr[data.GameId]
-				if gameMatch != nil {
-					RunOnMatch(gameMatch.MsgFromNats, gameMatch, func(gameMatch *GameMatch) {
-						gameMatch.PublicCreateRoom(data.RoomId)
-					})
-				}
-
-			}
+			self.log.Error("warn service %+v", instance)
 		}
 	}
 }

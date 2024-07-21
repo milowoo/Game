@@ -100,5 +100,5 @@ func MatchOverResponse(agent *gateway.Agent, res *pb.MatchOverRes) {
 
 	//通知客户端
 	agent.ReplyClient(res)
-	agent.GameSubject = constants.GetGameSubject(gameInfo.GameId, agent.RoomId)
+	agent.GameSubject = constants.GetGameSubject(gameInfo.GameId, res.GetGameIp())
 }

@@ -17,6 +17,6 @@ func GetGmCodeSubject(gameId string) string {
 	return GM_CODE_SUBJECT + gameId
 }
 
-func GetGameSubject(gameId string, roomId string) string {
-	return "game." + gameId + "." + roomId
+func GetGameSubject(gameId string, ip string) string {
+	return "game." + gameId + "." + ip
 }
