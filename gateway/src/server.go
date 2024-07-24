@@ -51,14 +51,9 @@ func NewServer(log *log.Logger) (*Server, error) {
 		Log:       log,
 	}
 
-	agentMgr := NewAgentMgr(g_Server)
-	g_Server.AgentMgr = agentMgr
-	natsMatch := NewNatsMatch(g_Server)
-	g_Server.MatchMgr = natsMatch
-	natsUCenter := NewNatsUCenter(g_Server)
-	g_Server.UCenterMgr = natsUCenter
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 	g_Server.RedisDao = redisDao
+
 	natsPool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
 		log.Error("nats 连接失败 %+v", err)
@@ -75,6 +70,12 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	g_Server.DynamicConfig = NewDynamicConfig(g_Server)
 
+	g_Server.AgentMgr = NewAgentMgr(g_Server)
+
+	g_Server.MatchMgr = NewNatsMatch(g_Server)
+
+	g_Server.UCenterMgr = NewNatsUCenter(g_Server)
+
 	g_Server.NatsGame = NewNatsGame(g_Server)
 
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
@@ -90,6 +91,7 @@ var UPGRADER = websocket.Upgrader{
 // 通知服务器退出
 
 func (self *Server) Quit() {
+	self.Log.Info("server quit ...")
 	if self.isQuit {
 		return
 	}

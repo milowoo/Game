@@ -1,12 +1,11 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/pb"
 	"reflect"
 )
 
-func UserExitHandler(agent *gateway.Agent, reason int32) {
+func UserExitHandler(agent *Agent, reason int32) {
 	if len(agent.GameSubject) < 1 {
 		agent.Log.Error("UserExitHandler invalid request ")
 		return
@@ -18,5 +17,5 @@ func UserExitHandler(agent *gateway.Agent, reason int32) {
 
 	typ := reflect.TypeOf(request)
 	protoName := typ.Elem().Name()
-	PublicToGame(agent, protoName, request)
+	agent.PublicToGame(protoName, request)
 }

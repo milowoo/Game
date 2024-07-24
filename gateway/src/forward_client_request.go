@@ -1,7 +1,6 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/constants"
 	"gateway/src/pb"
 	"github.com/gogo/protobuf/proto"
@@ -9,7 +8,7 @@ import (
 	"time"
 )
 
-func ForwardClientRequest(agent *gateway.Agent, protoName string, request proto.Message) {
+func (agent *Agent) ForwardClientRequest(protoName string, request proto.Message) {
 	if len(agent.GameSubject) < 1 {
 		agent.Log.Error("ForwardClientRequest uid %+v protoName %+v invalid", agent.Uid, protoName)
 		return
@@ -23,7 +22,7 @@ func ForwardClientRequest(agent *gateway.Agent, protoName string, request proto.
 		RoomId:    agent.RoomId,
 		Sn:        agent.Counter.GetIncrementValue(),
 		ProtoName: protoName,
-		HostIp:    gateway.GetHostIp(),
+		HostIp:    GetHostIp(),
 	}
 
 	commonRequest := &pb.GameCommonRequest{

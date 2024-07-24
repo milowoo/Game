@@ -35,6 +35,8 @@ func (self *NatsGame) Run() {
 		}
 	}()
 
+	self.log.Info("nats game  begin ....")
+
 	self.Server.WaitGroup.Add(1)
 	defer func() {
 		self.Server.WaitGroup.Done()

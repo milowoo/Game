@@ -1,15 +1,14 @@
-package handler
+package game_mgr
 
 import (
 	"encoding/json"
-	"game_mgr/src"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"io"
 	"net/http"
 )
 
-func AddColoredUidHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWriter) {
+func (self *HttpService) DeleteColoredUidHandler(body []byte, w http.ResponseWriter) {
 	var request domain.ColoredUidRequest
 	err := json.Unmarshal(body, &request)
 	if err != nil {
@@ -25,9 +24,9 @@ func AddColoredUidHandler(self *game_mgr.HttpService, body []byte, w http.Respon
 
 	redisKey := "COLORED_UID_KEY" + request.GameId
 
-	self.RedisDao.SAdd(setKey, request.UidList)
+	self.RedisDao.Del(setKey)
 
-	self.RedisDao.Set(redisKey, request.Activity, 0)
+	self.RedisDao.Del(redisKey)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

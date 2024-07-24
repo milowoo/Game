@@ -1,15 +1,14 @@
-package handler
+package game_mgr
 
 import (
 	"encoding/json"
-	"game_mgr/src"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"io"
 	"net/http"
 )
 
-func DeleteColoredUidHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWriter) {
+func (self *HttpService) KickColoredUidHandler(body []byte, w http.ResponseWriter) {
 	var request domain.ColoredUidRequest
 	err := json.Unmarshal(body, &request)
 	if err != nil {
@@ -19,15 +18,11 @@ func DeleteColoredUidHandler(self *game_mgr.HttpService, body []byte, w http.Res
 		io.WriteString(w, string(buf))
 		return
 	}
-	self.Log.Info("AddColoredUidHandler request %+v", request)
+	self.Log.Info("kickColoredUidHandler request %+v", request)
 
 	setKey := "COLORED_UID_SET_KEY" + request.GameId
 
-	redisKey := "COLORED_UID_KEY" + request.GameId
-
-	self.RedisDao.Del(setKey)
-
-	self.RedisDao.Del(redisKey)
+	self.RedisDao.SREM(setKey, request.UidList)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

@@ -1,7 +1,6 @@
 package ucenter
 
 import (
-	"fmt"
 	"github.com/go-ini/ini"
 	"ucenter/src/log"
 )
@@ -29,12 +28,12 @@ type MongoConfig struct {
 }
 
 const (
-	CFG_DIR = "../conf"
+	CFG_NAME = "/Users/wuchuangeng/game/ucenter/conf/game.ini"
 )
 
 func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 	ret := &GlobalConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", CFG_DIR))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +77,7 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 
 func LoadNatsConfig(log *log.Logger) (*NatsConfig, error) {
 	ret := &NatsConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -101,7 +100,7 @@ func LoadNatsConfig(log *log.Logger) (*NatsConfig, error) {
 
 func LoadRedisConfig(log *log.Logger) (*RedisConfig, error) {
 	ret := &RedisConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -139,7 +138,7 @@ func LoadRedisConfig(log *log.Logger) (*RedisConfig, error) {
 
 func LoadMongoConfig(log *log.Logger) (*MongoConfig, error) {
 	ret := &MongoConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err

@@ -53,6 +53,7 @@ func (self *NatsMatch) MatchRequest(gameId string, uid string, score int32, opt 
 }
 
 func (self *NatsMatch) SubjectMatchResponse() {
+	self.log.Info("SubjectMatchResponse subject %+v", self.receiveSubject)
 	self.NatsPool.Subscribe(self.receiveSubject, func(mess *nats.Msg) {
 		var matchOverRes pb.MatchOverRes
 		_ = proto.Unmarshal(mess.Data, &matchOverRes)
@@ -84,6 +85,8 @@ func (self *NatsMatch) Run() {
 			self.log.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
+
+	self.log.Info("nats match  begin ....")
 
 	self.SubjectMatchResponse()
 

@@ -1,13 +1,13 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/pb"
 	"github.com/gogo/protobuf/proto"
 	"time"
 )
 
-func PublicToGame(agent *gateway.Agent, protoName string, protoMsg proto.Message) {
+func (agent *Agent) PublicToGame(protoName string, protoMsg proto.Message) {
+	agent.Log.Info("PublicToGame protoName %+v", protoName)
 	if len(agent.GameSubject) < 1 {
 		agent.Log.Error("PublicToGame invalid request %+v", protoName)
 		return

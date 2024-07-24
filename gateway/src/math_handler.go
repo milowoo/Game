@@ -1,22 +1,21 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/constants"
 	"gateway/src/pb"
 )
 
-func MatchRequest(agent *gateway.Agent) {
+func (agent *Agent) MatchRequest() {
 	if agent.IsMatching {
 		agent.Log.Warn("MatchRequest uid %+v is matching", agent.Uid)
-		MatchResponse(agent, constants.PLAYER_IS_MATCHING, "player is matching")
+		agent.MatchResponse(constants.PLAYER_IS_MATCHING, "player is matching")
 		return
 	}
 
 	gameInfo := agent.DynamicConfig.GetGameInfo(agent.GameId)
 	if gameInfo == nil {
 		agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-		MatchResponse(agent, constants.INVALID_GAME_ID, "system err")
+		agent.MatchResponse(constants.INVALID_GAME_ID, "system err")
 		return
 	}
 
@@ -25,13 +24,13 @@ func MatchRequest(agent *gateway.Agent) {
 	if gameInfo.Type == constants.GAME_TYPE_SINGLE {
 		if len(agent.RoomId) > 1 {
 			agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-			MatchResponse(agent, constants.PLAYER_IN_ROOM, "have in room")
+			agent.MatchResponse(constants.PLAYER_IN_ROOM, "have in room")
 			return
 		}
 	} else if gameInfo.Type == constants.GAME_TYPE_HALL_SINGLE {
 		if agent.InHall == 2 {
 			agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-			MatchResponse(agent, constants.PLAYER_IN_ROOM, "have in room")
+			agent.MatchResponse(constants.PLAYER_IN_ROOM, "have in room")
 			return
 		}
 		if agent.InHall == 0 {
@@ -40,7 +39,7 @@ func MatchRequest(agent *gateway.Agent) {
 	} else if gameInfo.Type == constants.GAME_TYPE_HALL_1V1 {
 		if agent.InHall == 2 {
 			agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-			MatchResponse(agent, constants.PLAYER_IN_ROOM, "have in room")
+			agent.MatchResponse(constants.PLAYER_IN_ROOM, "have in room")
 			return
 		}
 		if agent.InHall == 0 {
@@ -49,7 +48,7 @@ func MatchRequest(agent *gateway.Agent) {
 	} else if gameInfo.Type == constants.GAME_TYPE_1V1 {
 		if len(agent.RoomId) > 1 {
 			agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-			MatchResponse(agent, constants.PLAYER_IN_ROOM, "have in room")
+			agent.MatchResponse(constants.PLAYER_IN_ROOM, "have in room")
 			return
 		}
 	}
@@ -57,11 +56,11 @@ func MatchRequest(agent *gateway.Agent) {
 	//发起匹配请求
 	agent.Server.MatchRequest(agent.GameId, agent.Uid, 1, opt)
 	agent.IsMatching = true
-	MatchResponse(agent, constants.CODE_SUCCESS, "success")
+	agent.MatchResponse(constants.CODE_SUCCESS, "success")
 }
 
-func MatchResponse(agent *gateway.Agent, code int32, msg string) {
-	binary, err := gateway.GetBinary(&pb.ClientMatchResponse{
+func (agent *Agent) MatchResponse(code int32, msg string) {
+	binary, err := GetBinary(&pb.ClientMatchResponse{
 		Code: code,
 		Msg:  msg},
 		agent.Log, agent.Config.AgentConfig)
@@ -71,7 +70,7 @@ func MatchResponse(agent *gateway.Agent, code int32, msg string) {
 	agent.SendBinaryNow(binary)
 }
 
-func MatchOverResponse(agent *gateway.Agent, res *pb.MatchOverRes) {
+func (agent *Agent) MatchOverResponse(res *pb.MatchOverRes) {
 	if agent.GameId != res.GetGameId() {
 		agent.Log.Error("MatchResponse uid %+v match game %+v agent game %+v", agent.Uid, res.GetGameId(), agent.GameId)
 		return
@@ -80,7 +79,7 @@ func MatchOverResponse(agent *gateway.Agent, res *pb.MatchOverRes) {
 	gameInfo := agent.DynamicConfig.GetGameInfo(agent.GameId)
 	if gameInfo == nil {
 		agent.Log.Warn("MatchOverResponse uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-		MatchResponse(agent, 102, "system err")
+		agent.MatchResponse(constants.SYSTEM_ERROR, "system err")
 		return
 	}
 

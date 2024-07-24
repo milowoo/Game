@@ -1,8 +1,7 @@
-package handler
+package game_mgr
 
 import (
 	"encoding/json"
-	"game_mgr/src"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"game_mgr/src/pb"
@@ -11,7 +10,7 @@ import (
 	"net/http"
 )
 
-func GmCodeHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWriter) {
+func (self *HttpService) GmCodeHandler(body []byte, w http.ResponseWriter) {
 	var request domain.GmCode
 	err := json.Unmarshal(body, &request)
 	if err != nil {

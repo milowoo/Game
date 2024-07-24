@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"gateway/src/constants"
-	"gateway/src/handler"
 	"gateway/src/log"
 	"gateway/src/pb"
 	"math"
@@ -301,33 +300,28 @@ func (self *Agent) OnBinary(msg []byte) {
 
 	//如果不是心跳包，则需要转发给游戏服务
 	if protoName == "pb.HeartbeatRequest" {
-		handler.HeartBeatReply(self)
+		self.HeartBeatReply()
 		return
 	}
 
 	if protoName == "pb.ClientLoginHallRequest" {
-		handler.LoginHallRequest(self)
-		return
-	}
-
-	if protoName == "pb.ClientMatchRequest" {
-		handler.LoginHallRequest(self)
+		self.LoginHallRequest()
 		return
 	}
 	if protoName == "pb.ClientMatchRequest" {
 		//发起匹配请求
-		handler.MatchRequest(self)
+		self.MatchRequest()
 		return
 	}
 
 	if protoName == "pb.ClientCancelMatchRequest" {
 		//发起取消匹配请求
-		handler.CancelMatchRequest(self)
+		self.CancelMatchRequest()
 		return
 	}
 
 	//转发消息给游戏服务器，并接收应答给客户端
-	handler.ForwardClientRequest(self, protoName, protoBody)
+	self.ForwardClientRequest(protoName, protoBody)
 
 }
 
@@ -430,7 +424,7 @@ func (self *Agent) notifyLostAgent(noticeGame bool) {
 
 	//通知 game_x 用户失去链接
 	if noticeGame {
-		handler.UserExitHandler(self, 1)
+		UserExitHandler(self, 1)
 	}
 
 }
@@ -494,7 +488,7 @@ func (self *Agent) checkGameException() {
 	if self.RequestGameErrFrame < self.FrameID-int(CheckGameExceptionInternal/AgentFrameInterval) {
 		//如果是在大厅，则需要游戏服创建大厅
 		if self.InHall == 1 {
-			handler.LonginHall2Match(self)
+			self.LonginHall2Match()
 			return
 		}
 		self.notifyLostAgent(false)
@@ -518,24 +512,24 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 
 	timestamp, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
-		handler.DoLoginReply(self, constants.INVALID_TIME, "unexpected timestamp", 0)
+		self.DoLoginReply(constants.INVALID_TIME, "unexpected timestamp", 0)
 		return -1
 	}
 
 	config := self.Config.AgentConfig
 	if config.EnableCheckLoginParams && math.Abs(float64(time.Now().Sub(time.Unix(timestamp, 0)))) >= float64(config.TimestampExpireDuration) {
-		handler.DoLoginReply(self, constants.EXPIRED_TIME, "timestamp expired", 0)
+		self.DoLoginReply(constants.EXPIRED_TIME, "timestamp expired", 0)
 		return -1
 	}
 
 	gameInfo := self.DynamicConfig.GetGameInfo(gameId)
 	if gameInfo == nil {
-		handler.DoLoginReply(self, constants.INVALID_GAME_ID, "invalid gameId", 0)
+		self.DoLoginReply(constants.INVALID_GAME_ID, "invalid gameId", 0)
 		return -1
 	}
 
 	if gameInfo.Status != 1 {
-		handler.DoLoginReply(self, constants.GAME_IS_OFF, "game offline", 0)
+		self.DoLoginReply(constants.GAME_IS_OFF, "game offline", 0)
 		return -1
 	}
 
@@ -545,7 +539,7 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	uid, err := g_Server.UCenterMgr.ApplyUid(pid)
 	if err != nil {
 		self.Log.Error("EnterGame  %+v apply err %+v", pid, err)
-		handler.DoLoginReply(self, constants.SYSTEM_ERROR, "system err", 0)
+		self.DoLoginReply(constants.SYSTEM_ERROR, "system err", 0)
 		return -1
 	}
 	self.Pid = pid
@@ -556,12 +550,12 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 		agentMgr.EnterGame(self)
 	})
 
-	handler.DoLoginReply(self, 0, "success", 0)
+	self.DoLoginReply(0, "success", 0)
 	return 0
 }
 
-func (self *Agent) MatchResponse(res *pb.MatchOverRes) {
-	handler.MatchOverResponse(self, res)
+func (self *Agent) CallMatchResponse(res *pb.MatchOverRes) {
+	self.MatchOverResponse(res)
 }
 
 func (self *Agent) ProcGamePushMessage(res *pb.GamePushMessage) {

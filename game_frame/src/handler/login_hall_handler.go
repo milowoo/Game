@@ -20,6 +20,6 @@ func (self *Room) LoginHall(reply string, head *pb.CommonHead, request *pb.Login
 		Code: constants.CODE_SUCCESS,
 		Msg:  "",
 	}
-	
+
 	self.ResponseGateway(reply, head, response)
 }

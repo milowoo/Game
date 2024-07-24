@@ -1,8 +1,7 @@
-package handler
+package game_mgr
 
 import (
 	"encoding/json"
-	game_mgr "game_mgr/src"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
@@ -11,7 +10,7 @@ import (
 	"time"
 )
 
-func OnOffGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWriter) {
+func (self *HttpService) OnOffGameHandler(body []byte, w http.ResponseWriter) {
 	var request domain.GameInfo
 	err := json.Unmarshal(body, &request)
 	if err != nil {
@@ -30,8 +29,8 @@ func OnOffGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWr
 		return
 	}
 
-	dbData, err := self.Mongo.GetGame(request.GameId)
-	if err == nil {
+	dbData := self.Mongo.GetGame(request.GameId)
+	if dbData == nil {
 		self.Log.Info(" onOffGame err no exist gameId %+v err %+v ", request.GameId, err)
 		httpRes := domain.Response{Code: constants.INVALID_STATUS, Msg: "game no exist", Data: ""}
 		buf, _ := json.Marshal(httpRes)
@@ -48,14 +47,15 @@ func OnOffGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWr
 	redisBuf, _ := json.Marshal(dbData)
 	self.RedisDao.Set(request.GameId, redisBuf, 0)
 
-	self.Mongo.SavaGame(request.GameId, &dbData)
-
+	self.Mongo.SavaGame(request.GameId, dbData)
 	//通告 gameId 变化
-	self.IClient.PublishConfig(vo.ConfigParam{
+	publicResult, err := self.IClient.PublishConfig(vo.ConfigParam{
 		DataId:  self.GameConfig.NacosConfig.GameDataId,
 		Group:   self.GameConfig.NacosConfig.GameGroup,
 		Content: request.GameId,
 	})
+
+	self.Log.Info("on off game public result %v err %+v", publicResult, err)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

@@ -43,6 +43,8 @@ func (self *DynamicConfig) Run() {
 		}
 	}()
 
+	self.log.Info("dynamic config  begin ....")
+
 	self.Server.WaitGroup.Add(1)
 	defer func() {
 		self.Server.WaitGroup.Done()
@@ -108,6 +110,7 @@ func (self *DynamicConfig) GetAllGame() map[string]*domain.GameInfo {
 }
 
 func (self *DynamicConfig) Quit() {
+	self.log.Info("dynamic config quit ...")
 	self.exit <- true
 }
 

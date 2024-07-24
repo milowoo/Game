@@ -57,9 +57,13 @@ type NacosConfig struct {
 	GameDataId string
 }
 
+const (
+	CFG_NAME = "/Users/wuchuangeng/game/gateway/conf/game.ini"
+)
+
 func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 	ret := &GlobalConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -117,7 +121,7 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 
 func NewAgentConfig(log *log.Logger) (*AgentConfig, error) {
 	ret := &AgentConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -194,7 +198,7 @@ func NewAgentConfig(log *log.Logger) (*AgentConfig, error) {
 
 func NewRedisConfig(log *log.Logger) (*RedisConfig, error) {
 	ret := &RedisConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -232,7 +236,7 @@ func NewRedisConfig(log *log.Logger) (*RedisConfig, error) {
 
 func NewNatsConfig(log *log.Logger) (*NatsConfig, error) {
 	ret := &NatsConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -306,7 +310,7 @@ func NewNetworkAsServerFromIniFile(cfg *ini.File, sectionName string) (*NetworkA
 
 func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
 	ret := &NacosConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -318,7 +322,7 @@ func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
 		return nil, err
 	}
 
-	key, err := section.GetKey("Ip")
+	key, err := section.GetKey("ip")
 	if err != nil {
 		log.Error("get nacos section key Ip  err ")
 		return nil, err

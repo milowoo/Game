@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
-	"game_mgr/src/handler"
 	"game_mgr/src/log"
 	"game_mgr/src/mongo"
 	"game_mgr/src/mq"
@@ -51,13 +50,13 @@ func NewHttpService(config *GlobalConfig, log *log.Logger) (*HttpService, error)
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 	httpService.RedisDao = redisDao
 
-	databaseDAO, err := mongo.NewDataSource(config.MongoConfig.Address, config.MongoConfig.Name, log)
-	if err != nil {
-		log.Error("NewDataSource err %v", err)
-		return nil, err
+	client := mongo.Connect(config.MongoConfig.Address, config.MongoConfig.Name, log)
+	if client == nil {
+		log.Error("NewDataSource err  ")
+		return nil, nil
 	}
 
-	httpService.Mongo = mongo.NewMongoDao(databaseDAO, log)
+	httpService.Mongo = mongo.NewMongoDao(client, log)
 
 	natsPool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
@@ -77,7 +76,8 @@ func NewHttpService(config *GlobalConfig, log *log.Logger) (*HttpService, error)
 	if !config.LocalModel {
 		hostIP = os.Getenv("K8S_HOST_IP")
 	}
-	httpService.hostIp = fmt.Sprintf("%v:%v", hostIP, config.Port)
+	httpService.hostIp = fmt.Sprintf("%+v:%+v", hostIP, config.Port)
+	log.Info("hostIp %+v Port %+v", hostIP, config.Port)
 	return httpService, nil
 }
 
@@ -133,31 +133,31 @@ func (self *HttpService) listenHttpServer() {
 		switch r.RequestURI {
 		case "/addGame":
 			//新增游戏
-			handler.AddGameHandler(self, body, w)
+			self.AddGameHandler(body, w)
 		case "/updateGame":
 			//游戏数据更新
-			handler.UpdateGameHanler(self, body, w)
+			self.UpdateGameHandler(body, w)
 		case "/onOffGame":
 			//游戏上下架
-			handler.OnOffGameHandler(self, body, w)
+			self.OnOffGameHandler(body, w)
 		case "/greenBlueDeployment":
 			//游戏蓝绿发布
-			handler.GreenBlueDeploymentHandler(self, body, w)
-		case "addAiInfo":
+			self.GreenBlueDeploymentHandler(body, w)
+		case "/addAiInfo":
 			//增加AI信息
-			handler.AddAiHandler(self, body, w)
-		case "addColoredUidList":
+			self.AddAiHandler(body, w)
+		case "/addColoredUidList":
 			//增加活动染色用户
-			handler.AddColoredUidHandler(self, body, w)
-		case "deleteColoredUidList":
+			self.AddColoredUidHandler(body, w)
+		case "/deleteColoredUidList":
 			//删除活动染色用户
-			handler.DeleteColoredUidHandler(self, body, w)
-		case "kickColorUidList":
+			self.DeleteColoredUidHandler(body, w)
+		case "/kickColorUidList":
 			//剔除染色用户
-			handler.KickColoredUidHandler(self, body, w)
+			self.KickColoredUidHandler(body, w)
 		case "/gmCode":
 			//GM CODE 命令
-			handler.GmCodeHandler(self, body, w)
+			self.GmCodeHandler(body, w)
 		default:
 			httpRes := domain.Response{Code: constants.INVALID_URL, Msg: "invalid request url", Data: ""}
 			buf, _ := json.Marshal(httpRes)

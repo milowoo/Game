@@ -1,27 +1,26 @@
-package handler
+package ucenter
 
 import (
 	"github.com/nats-io/go-nats"
 	"strconv"
-	"ucenter/src"
 	"ucenter/src/constants"
 	"ucenter/src/log"
 	"ucenter/src/mq"
 )
 
 type HandlerMgr struct {
-	server      *ucenter.Server
+	server      *Server
 	NatsPool    *mq.NatsPool
-	MsgFromNats chan ucenter.Closure
+	MsgFromNats chan Closure
 	log         *log.Logger
 	exit        chan bool
 }
 
-func NewHandler(server *ucenter.Server) *HandlerMgr {
+func NewHandler(server *Server) *HandlerMgr {
 	return &HandlerMgr{
 		server:      server,
 		NatsPool:    server.NatsPool,
-		MsgFromNats: make(chan ucenter.Closure, 4096),
+		MsgFromNats: make(chan Closure, 4096),
 		log:         server.Log,
 		exit:        make(chan bool),
 	}
@@ -57,6 +56,8 @@ func (self *HandlerMgr) GreateUid() string {
 }
 
 func (self *HandlerMgr) SubscribeGetUid() {
+	self.log.Info("SubscribeGetUid begin ")
+
 	// 订阅一个Nats Request 主题
 	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
 		self.log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)

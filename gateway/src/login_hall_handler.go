@@ -1,7 +1,6 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/constants"
 	"gateway/src/pb"
 	"github.com/gogo/protobuf/proto"
@@ -9,50 +8,50 @@ import (
 	"time"
 )
 
-func LoginHallRequest(agent *gateway.Agent) {
+func (agent *Agent) LoginHallRequest() {
 	if agent.IsMatching {
 		agent.Log.Warn("LoginHallRequest uid %+v is matching", agent.Uid)
-		LoginHallResponse(agent, constants.PLAYER_IS_MATCHING, "player is matching")
+		agent.LoginHallResponse(constants.PLAYER_IS_MATCHING, "player is matching")
 		return
 	}
 
 	gameInfo := agent.DynamicConfig.GetGameInfo(agent.GameId)
 	if gameInfo == nil {
 		agent.Log.Warn("LoginHallRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-		LoginHallResponse(agent, constants.SYSTEM_ERROR, "system err")
+		agent.LoginHallResponse(constants.SYSTEM_ERROR, "system err")
 		return
 	}
 
 	if gameInfo.Type != constants.GAME_TYPE_HALL_1V1 && gameInfo.Type != constants.GAME_TYPE_HALL_SINGLE {
 		agent.Log.Warn("LoginHallRequest uid %+v invalid request %+v", agent.Uid, agent.GameId)
-		LoginHallResponse(agent, constants.INVALID_REQUEST, "invalid request")
+		agent.LoginHallResponse(constants.INVALID_REQUEST, "invalid request")
 		return
 	}
 
 	if gameInfo.Type == constants.GAME_TYPE_HALL_SINGLE {
 		if agent.InHall == 2 {
 			agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-			LoginHallResponse(agent, constants.PLAYER_IN_ROOM, "have in room")
+			agent.LoginHallResponse(constants.PLAYER_IN_ROOM, "have in room")
 			return
 		}
 	} else if gameInfo.Type == constants.GAME_TYPE_HALL_SINGLE {
 		if agent.InHall == 2 {
 			agent.Log.Warn("MatchRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-			LoginHallResponse(agent, constants.PLAYER_IN_ROOM, "have in room")
+			agent.LoginHallResponse(constants.PLAYER_IN_ROOM, "have in room")
 			return
 		}
 	}
 
-	if LonginHall2Match(agent) != nil {
+	if agent.LonginHall2Match() != nil {
 		agent.Log.Warn("LoginHallRequest uid %+v get game info err gameId %+v", agent.Uid, agent.GameId)
-		LoginHallResponse(agent, constants.SYSTEM_ERROR, "system err")
+		agent.LoginHallResponse(constants.SYSTEM_ERROR, "system err")
 		return
 	}
 
-	LoginHallResponse(agent, 0, "success")
+	agent.LoginHallResponse(constants.CODE_SUCCESS, "success")
 }
 
-func LonginHall2Match(agent *gateway.Agent) error {
+func (agent *Agent) LonginHall2Match() error {
 	reqeust := pb.CreateHallRequest{
 		Uid:    agent.Uid,
 		GameId: agent.GameId,
@@ -76,12 +75,12 @@ func LonginHall2Match(agent *gateway.Agent) error {
 	return nil
 }
 
-func LoginHall2Game(agent *gateway.Agent) {
-
+func (agent *Agent) LoginHall2Game() {
+	//todo 111
 }
 
-func LoginHallResponse(agent *gateway.Agent, code int32, msg string) {
-	binary, err := gateway.GetBinary(&pb.ClientLoginHallResponse{
+func (agent *Agent) LoginHallResponse(code int32, msg string) {
+	binary, err := GetBinary(&pb.ClientLoginHallResponse{
 		Code: code,
 		Msg:  msg},
 		agent.Log, agent.Config.AgentConfig)

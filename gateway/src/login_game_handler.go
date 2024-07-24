@@ -1,13 +1,12 @@
-package handler
+package gateway
 
 import (
-	"gateway/src"
 	"gateway/src/pb"
 	"time"
 )
 
-func DoLoginReply(agent *gateway.Agent, code int32, msg string, reconnect int32) {
-	binary, err := gateway.GetBinary(&pb.LoginResponse{
+func (agent *Agent) DoLoginReply(code int32, msg string, reconnect int32) {
+	binary, err := GetBinary(&pb.LoginResponse{
 		Code:      code,
 		Msg:       msg,
 		Uid:       agent.Uid,

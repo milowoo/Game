@@ -1,15 +1,14 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/constants"
 	"gateway/src/pb"
 )
 
-func CancelMatchRequest(agent *gateway.Agent) {
+func (agent *Agent) CancelMatchRequest() {
 	if !agent.IsMatching {
 		agent.Log.Warn("CancelMatchRequest uid %+v is not in matching", agent.Uid)
-		MatchResponse(agent, constants.PLAYER_NO_MATCHING, "player is no in matching")
+		agent.MatchResponse(constants.PLAYER_NO_MATCHING, "player is no in matching")
 		return
 	}
 
@@ -17,7 +16,7 @@ func CancelMatchRequest(agent *gateway.Agent) {
 	agent.Server.CancelMatchRequest(agent.GameId, agent.Uid)
 
 	agent.IsMatching = false
-	binary, err := gateway.GetBinary(&pb.ClientCancelMatchResponse{
+	binary, err := GetBinary(&pb.ClientCancelMatchResponse{
 		Code: 0,
 		Msg:  "success"},
 		agent.Log, agent.Config.AgentConfig)

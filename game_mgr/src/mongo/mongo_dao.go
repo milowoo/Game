@@ -1,47 +1,43 @@
 package mongo
 
 import (
+	"context"
 	"game_mgr/src/domain"
 	"game_mgr/src/log"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"time"
-
-	"gopkg.in/mgo.v2/bson"
 )
 
 type MongoDAO struct {
-	BaseDAO
-	log *log.Logger
+	database *mongo.Database
+	log      *log.Logger
 }
 
-func NewMongoDao(dataSource *DataSource, log *log.Logger) *MongoDAO {
-	dao := &MongoDAO{BaseDAO: *NewBaseDAO(dataSource),
+func NewMongoDao(client *Client, log *log.Logger) *MongoDAO {
+	dao := &MongoDAO{database: client.database,
 		log: log}
 	return dao
 }
 
 // 获取游戏信息
-func (dao *MongoDAO) GetGame(gameId string) (*domain.GameInfo, error) {
-	session := dao.dataSource.GetSession()
-	defer session.Close()
-
-	c := session.DB(dao.dataSource.database).C("game")
-	m := domain.GameInfo{}
-	err := c.Find(&bson.M{"_id": gameId}).One(&m)
+func (dao *MongoDAO) GetGame(gameId string) *domain.GameInfo {
+	c := dao.database.Collection("game_info")
+	var m domain.GameInfo
+	err := c.FindOne(context.Background(), bson.M{"gameid": gameId}).Decode(&m)
 	if err != nil {
-		dao.log.Debug("GetGame err %v uid %v ", err, gameId)
-		return &m, err
+		dao.log.Info("GetGame err %v gameId %v ", err, gameId)
+		return nil
 	}
-	return &m, nil
+	return &m
 }
 
 func (dao *MongoDAO) InsertGame(game *domain.GameInfo) error {
 	game.UTime = time.Now()
 	game.CTime = time.Now()
 
-	session := dao.dataSource.GetSession()
-	defer session.Close()
-	c := session.DB(dao.dataSource.database).C("game")
-	err := c.Insert(game)
+	c := dao.database.Collection("game_info")
+	_, err := c.InsertOne(context.Background(), game)
 	if err != nil {
 		dao.log.Error("InsertGame err %v gameId %v", game.GameId)
 		return err
@@ -51,48 +47,24 @@ func (dao *MongoDAO) InsertGame(game *domain.GameInfo) error {
 
 }
 
-func (dao *MongoDAO) SavaGame(gameId string, game interface{}) error {
-	session := dao.dataSource.GetSession()
-	defer session.Close()
-	c := session.DB(dao.dataSource.database).C("game")
+func (dao *MongoDAO) SavaGame(gameId string, game *domain.GameInfo) error {
+	game.UTime = time.Now()
 
-	query := bson.M{"_id": gameId}
-
-	_, err := c.Upsert(query, game)
+	query := bson.M{"gameid": gameId}
+	updateFilter := bson.M{"$set": bson.M{
+		"name":      game.Name,
+		"status":    game.Status,
+		"groupname": game.GroupName,
+		"gametime":  game.GameTime,
+		"matchtime": game.MatchTime,
+		"operator":  game.Operator,
+		"utime":     game.UTime}}
+	c := dao.database.Collection("game_info")
+	_, err := c.UpdateOne(context.Background(), query, updateFilter)
 	if err != nil {
-		dao.log.Debug("UpdatePlayer err %v, uid %v", err, gameId)
+		dao.log.Info("SavaGame err %v, gameId %v", err, gameId)
 		return err
 	}
 
 	return nil
-}
-
-func (dao *MongoDAO) DeleteGame(gameId string) error {
-	session := dao.dataSource.GetSession()
-	defer session.Close()
-	c := session.DB(dao.dataSource.database).C("game")
-
-	err := c.Remove(bson.M{"_id": gameId})
-
-	if err != nil {
-		dao.log.Debug("DeleteGame err %v gameId %v", err, gameId)
-		return err
-	}
-
-	return nil
-}
-
-func (dao *MongoDAO) GetGameByTime(updateTime int64) ([]domain.GameInfo, error) {
-	session := dao.dataSource.GetSession()
-	defer session.Close()
-	m := make([]domain.GameInfo, 0)
-
-	c := session.DB(dao.dataSource.database).C("game")
-	var game domain.GameInfo
-	iter := c.Find(bson.M{"uTime": bson.M{"$gt": updateTime}}).Iter()
-	for iter.Next(&game) {
-		m = append(m, game)
-	}
-
-	return m, nil
 }

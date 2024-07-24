@@ -1,7 +1,6 @@
-package handler
+package gateway
 
 import (
-	gateway "gateway/src"
 	"gateway/src/pb"
 	"reflect"
 	"time"
@@ -11,12 +10,12 @@ import (
 跟游戏服务的心跳处理
 */
 
-func GamePing(agent *gateway.Agent) {
+func (agent *Agent) GamePing() {
 	request := &pb.PingRequest{
 		Timestamp: time.Now().Unix(),
 	}
 
 	typ := reflect.TypeOf(request)
 	protoName := typ.Elem().Name()
-	PublicToGame(agent, protoName, request)
+	agent.PublicToGame(protoName, request)
 }

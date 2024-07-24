@@ -148,6 +148,8 @@ func (self *Server) Run() {
 		self.Quit()
 	}
 
+	self.Log.Info("match server run begin ....")
+
 	go self.DynamicConfig.Run()
 
 	gameMap := self.DynamicConfig.GetAllGame()

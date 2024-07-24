@@ -1,8 +1,7 @@
-package handler
+package game_mgr
 
 import (
 	"encoding/json"
-	"game_mgr/src"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
@@ -14,7 +13,7 @@ import (
 /*
 增加游戏
 */
-func AddGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWriter) {
+func (self *HttpService) AddGameHandler(body []byte, w http.ResponseWriter) {
 	var request domain.GameInfo
 	err := json.Unmarshal(body, &request)
 	if err != nil {
@@ -43,9 +42,9 @@ func AddGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWrit
 	request.CTime = time.Now()
 	request.UTime = time.Now()
 
-	//判断是否有记录
-	data, _ := self.RedisDao.EXISTS(request.GameId)
-	if data {
+	//判断是否存在这个game 信息
+	result := self.Mongo.GetGame(request.GameId)
+	if result != nil {
 		self.Log.Info(" addGame err have exist gameId %+v err %+v ", request.GameId, err)
 		httpRes := domain.Response{Code: constants.GAME_IS_EXIST, Msg: "game have exist", Data: ""}
 		buf, _ := json.Marshal(httpRes)
@@ -53,9 +52,11 @@ func AddGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWrit
 		return
 	}
 
-	//判断是否存在这个game 信息
-	_, err = self.Mongo.GetGame(request.GameId)
-	if err != nil {
+	self.Log.Info("result %+v", result)
+
+	//判断是否有记录
+	data, _ := self.RedisDao.EXISTS(request.GameId)
+	if data {
 		self.Log.Info(" addGame err have exist gameId %+v err %+v ", request.GameId, err)
 		httpRes := domain.Response{Code: constants.GAME_IS_EXIST, Msg: "game have exist", Data: ""}
 		buf, _ := json.Marshal(httpRes)
@@ -71,11 +72,13 @@ func AddGameHandler(self *game_mgr.HttpService, body []byte, w http.ResponseWrit
 	self.Mongo.InsertGame(&request)
 
 	//通告 gameId 变化
-	self.IClient.PublishConfig(vo.ConfigParam{
+	publicResult, err := self.IClient.PublishConfig(vo.ConfigParam{
 		DataId:  self.GameConfig.NacosConfig.GameDataId,
 		Group:   self.GameConfig.NacosConfig.GameGroup,
 		Content: request.GameId,
 	})
+
+	self.Log.Info("PublishConfig result %+v err %+v", publicResult, err)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

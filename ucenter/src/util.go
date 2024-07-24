@@ -2,7 +2,6 @@ package ucenter
 
 import (
 	"math/rand"
-	"ucenter/src/handler"
 )
 
 type Closure = func()
@@ -18,7 +17,7 @@ func SafeRunClosure(v interface{}, c Closure) {
 	c()
 }
 
-func RunOnHandler(c chan Closure, mgr *handler.HandlerMgr, cb func(mgr *handler.HandlerMgr)) {
+func RunOnHandler(c chan Closure, mgr *HandlerMgr, cb func(mgr *HandlerMgr)) {
 	c <- func() {
 		cb(mgr)
 	}

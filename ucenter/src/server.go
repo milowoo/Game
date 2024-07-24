@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"ucenter/src/handler"
 	"ucenter/src/log"
 	"ucenter/src/mongo"
 	"ucenter/src/mq"
@@ -20,7 +19,7 @@ type Server struct {
 	NatsPool  *mq.NatsPool
 	RedisDao  *redis.RedisDao
 	MongoDao  *mongo.MongoDAO
-	Handler   *handler.HandlerMgr
+	Handler   *HandlerMgr
 	isQuit    bool
 }
 
@@ -55,7 +54,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	g_Server.NatsPool = pool
 
-	handlerMgr := handler.NewHandler(g_Server)
+	handlerMgr := NewHandler(g_Server)
 	g_Server.Handler = handlerMgr
 
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
@@ -84,6 +83,8 @@ func (self *Server) Run() {
 		self.Log.Error("Config is nil ...")
 		self.Quit()
 	}
+
+	self.Log.Info("ucenter run begin ")
 
 	go self.Handler.Run()
 

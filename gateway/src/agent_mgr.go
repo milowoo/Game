@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+const (
+	RoomMgrFrameInterval = time.Millisecond * 500
+)
+
 type AgentMgr struct {
 	Server       *Server
 	Log          *log.Logger
@@ -21,6 +25,7 @@ func NewAgentMgr(server *Server) *AgentMgr {
 		Log:          server.Log,
 		uid2Agent:    make(map[string]*Agent),
 		MsgFromAgent: make(chan Closure, 16*1024),
+		frameTimer:   time.NewTicker(RoomMgrFrameInterval),
 		frameID:      0,
 	}
 }
@@ -32,6 +37,8 @@ func (self *AgentMgr) Run() {
 			self.Log.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
+
+	self.Log.Info("agent mgr begin ....")
 
 	self.Server.WaitGroup.Add(1)
 	defer func() {
@@ -57,8 +64,8 @@ ALL:
 }
 
 func (self *AgentMgr) Frame() {
+	self.Log.Info("frame begin ...")
 	self.SetNextFrameId()
-
 }
 
 func (self *AgentMgr) OnQuit() {
@@ -77,6 +84,7 @@ func (self *AgentMgr) OnQuit() {
 }
 
 func (self *AgentMgr) Quit() {
+	self.Log.Info("agent mgr quit ...")
 	close(self.MsgFromAgent)
 }
 
@@ -112,7 +120,7 @@ func (self *AgentMgr) MatchResponse(res *pb.MatchOverRes) {
 	}
 
 	RunOnAgent(agent.MsgFromAgentMgr, agent, func(agent *Agent) {
-		agent.MatchResponse(res)
+		agent.CallMatchResponse(res)
 	})
 
 }

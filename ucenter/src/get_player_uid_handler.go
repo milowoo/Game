@@ -1,4 +1,4 @@
-package handler
+package ucenter
 
 import (
 	"github.com/golang/protobuf/proto"
