@@ -56,7 +56,7 @@ func (self *HandlerMgr) GreateUid() string {
 }
 
 func (self *HandlerMgr) SubscribeGetUid() {
-	self.log.Info("SubscribeGetUid begin ")
+	self.log.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
 
 	// 订阅一个Nats Request 主题
 	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {

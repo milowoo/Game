@@ -2,25 +2,20 @@ package gateway
 
 import (
 	"gateway/src/pb"
-	"time"
+	"github.com/golang/protobuf/proto"
 )
 
-func (agent *Agent) DoLoginReply(code int32, msg string, reconnect int32) {
-	binary, err := GetBinary(&pb.LoginResponse{
-		Code:      code,
-		Msg:       msg,
-		Uid:       agent.Uid,
-		RoomId:    agent.RoomId,
-		Reconnect: reconnect},
-		agent.Log, agent.Config.AgentConfig)
-	if err != nil {
-		return
-	}
-	agent.SendBinaryNow(binary)
-	if code != 200 {
-		return
-	}
+func (agent *Agent) DoLoginReply(code int32, msg string) {
+	response := &pb.LoginResponse{
+		Code: code,
+		Msg:  msg,
+		Uid:  agent.Uid}
 
-	agent.Log.Debug("uid %v loginReply, %t, %s", agent.Uid, code, msg)
-	agent.DelayDisconnect(time.Second * 5)
+	protoName := proto.MessageName(response)
+	head := &pb.ClientCommonHead{Pid: agent.Pid,
+		Sn:        agent.Counter.GetIncrementValue(),
+		ProtoName: protoName}
+
+	agent.ReplyClient(head, response)
+	agent.Log.Info("uid %v loginReply, %+v, %+v", agent.Uid, code, msg)
 }

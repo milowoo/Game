@@ -26,7 +26,7 @@ func (dao *MongoDAO) GetGame(gameId string) *domain.GameInfo {
 	var m domain.GameInfo
 	err := c.FindOne(context.Background(), bson.M{"gameid": gameId}).Decode(&m)
 	if err != nil {
-		dao.log.Info("GetGame err %v gameId %v ", err, gameId)
+		dao.log.Info("GetGame err %+v gameId %+v ", err, gameId)
 		return nil
 	}
 	return &m
@@ -39,7 +39,7 @@ func (dao *MongoDAO) InsertGame(game *domain.GameInfo) error {
 	c := dao.database.Collection("game_info")
 	_, err := c.InsertOne(context.Background(), game)
 	if err != nil {
-		dao.log.Error("InsertGame err %v gameId %v", game.GameId)
+		dao.log.Error("InsertGame err %+v gameId %+v", err, game.GameId)
 		return err
 	}
 

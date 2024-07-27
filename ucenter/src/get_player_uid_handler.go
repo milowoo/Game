@@ -25,18 +25,18 @@ func (self *HandlerMgr) GetPlayerUID(reply string, msg *nats.Msg) {
 		return
 	}
 	pid := request.GetPid()
-	player, err := self.server.MongoDao.GetPlayerByPid(pid)
+	player, err := self.server.MongoDao.GetPlayer(pid)
 	if err != nil {
 		self.log.Error("fail to get player by sign(%+v): %+v", pid, err)
 	}
 	var uid string
 	if player == nil {
 		uid = self.GreateUid()
-		dbPlayer := domain.NewPlayer(uid)
-		dbPlayer.Pid = pid
+		dbPlayer := domain.NewPlayer(pid, uid)
+		dbPlayer.Uid = pid
 		self.server.MongoDao.InsertPlayer(dbPlayer)
 	} else {
-		uid = player.Uid.String()
+		uid = player.Uid
 	}
 
 	response := &pb.ApplyUidResponse{

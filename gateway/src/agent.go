@@ -8,7 +8,6 @@ import (
 	"gateway/src/pb"
 	"math"
 	"net/url"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -106,9 +105,9 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		RequestGameErrFrame:  0,
 		Counter:              &AtomicCounter{},
 	}
-
+	log.Info("receive connect %+v", values)
 	self.MsgFromAgentMgr <- func() {
-		self.LoginGame(values.Get("game_id"), values.Get("timestamp"), values.Get("pid"), values.Get("token"))
+		self.LoginGame(values.Get("gameId"), values.Get("timestamp"), values.Get("pid"), values.Get("token"))
 	}
 	return self
 }
@@ -122,7 +121,7 @@ func (self *Agent) readPump() {
 	}()
 
 	for {
-		t, msg, err := self.Conn.ReadMessage()
+		_, msg, err := self.Conn.ReadMessage()
 		if err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
 				self.RecvQueue <- func() { self.onMultiError(err) }
@@ -132,11 +131,6 @@ func (self *Agent) readPump() {
 		}
 
 		self.LastPingTimeFrame = self.FrameID
-
-		if t == websocket.TextMessage {
-			self.RecvQueue <- func() { self.OnText(string(msg[:])) }
-			continue
-		}
 
 		// t == websocket.BinaryMessage
 		self.RecvQueue <- func() { self.OnBinary(msg) }
@@ -203,8 +197,6 @@ func (self *Agent) Run() {
 		self.FrameTicker.Stop()
 	}()
 
-	self.OnOpen()
-
 	for {
 		select {
 		case c, ok := <-self.RecvQueue:
@@ -245,51 +237,31 @@ func (self *Agent) SendBinaryNow(msg []byte) {
 	self.SendQueue <- NewSendBinaryEvent(msg)
 }
 
-func (self *Agent) OnOpen() {
-	self.Log.Info("...")
-}
-
 /*
 读取客户端的请求， 进行业务处理
 */
 func (self *Agent) OnBinary(msg []byte) {
-	ba := pb.CreateByteArray(msg)
-
-	// 协议名长度
-	dataLen, err := ba.ReadUint8()
+	var request pb.ClientCommonRequest
+	err := proto.Unmarshal(msg, &request)
 	if err != nil {
-		self.Log.Error("uid %v read proto head err %+v", self.Uid, err)
+		self.Log.Error("OnBinary invalid request message uid %v read proto err %+v", self.Uid, err)
 		return
 	}
 
 	// 协议名
-	protoName, err := ba.ReadString(int(dataLen))
-	if err != nil {
-		self.Log.Error("uid %v read proto name err %+v", self.Uid, err)
-		return
-	}
+	protoName := request.GetHead().ProtoName
+
 	protoType := proto.MessageType(protoName)
 	if protoType == nil {
-		self.Log.Error("uid %v did not find proto ===== %s", self.Uid, protoName)
+		self.Log.Error("OnBinary uid %v did not find proto ===== %s", self.Uid, protoName)
 		return
 	}
 
-	// 协议结构体
-	protoBody := reflect.New(protoType.Elem()).Interface().(proto.Message)
-	pbBytes := make([]byte, ba.Available())
-	_, err = ba.Read(pbBytes)
+	var protoBody proto.Message
+	err = proto.Unmarshal(request.Body, protoBody)
 	if err != nil {
-		self.Log.Error("uid %v read proto body err", self.Uid, err)
+		self.Log.Error("OnBinary invalid body message uid %v read proto err %+v", self.Uid, err)
 		return
-	}
-	err = proto.Unmarshal(pbBytes, protoBody)
-	if err != nil {
-		self.Log.Error("uid %v proto unmarshal err %+v", self.Uid, err)
-		return
-	}
-
-	if self.Config.AgentConfig.EnableLogRecv && protoName != "pb.c2sHeart" && protoName != "pb.c2sStrike" {
-		self.Log.Error("uid %+v receive ==== %s %+v", self.Uid, protoName, protoBody)
 	}
 
 	//检验游戏是否在开放
@@ -300,28 +272,28 @@ func (self *Agent) OnBinary(msg []byte) {
 
 	//如果不是心跳包，则需要转发给游戏服务
 	if protoName == "pb.HeartbeatRequest" {
-		self.HeartBeatReply()
+		self.HeartBeatHandler(request.GetHead(), protoBody.(*pb.HeartbeatRequest))
 		return
 	}
 
 	if protoName == "pb.ClientLoginHallRequest" {
-		self.LoginHallRequest()
+		self.LoginHallHandler(request.GetHead(), protoBody.(*pb.ClientLoginHallRequest))
 		return
 	}
 	if protoName == "pb.ClientMatchRequest" {
 		//发起匹配请求
-		self.MatchRequest()
+		self.MatchHandler(request.GetHead(), protoBody.(*pb.ClientMatchRequest))
 		return
 	}
 
 	if protoName == "pb.ClientCancelMatchRequest" {
 		//发起取消匹配请求
-		self.CancelMatchRequest()
+		self.CancelMatchHandler(request.GetHead(), protoBody.(*pb.CancelMatchRequest))
 		return
 	}
 
 	//转发消息给游戏服务器，并接收应答给客户端
-	self.ForwardClientRequest(protoName, protoBody)
+	self.ForwardClientRequest(request.GetHead(), protoBody)
 
 }
 
@@ -339,10 +311,6 @@ func (self *Agent) checkGameOpen() bool {
 	}
 
 	return true
-}
-
-func (self *Agent) OnText(msg string) {
-	self.Log.Info("on longer supports text message %s", msg)
 }
 
 func (self *Agent) OnError(err error) {
@@ -507,29 +475,30 @@ func (self *Agent) DelayDisconnect(delay time.Duration) {
 
 func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	if self.Config.AgentConfig.EnableLogRecv {
-		self.Log.Debug(" receive ====  %+v %+s %s %s %v", t, gameId, pid, token)
+		self.Log.Debug(" receive ====  gameId [%+v] pid[%+v] token[%+v] t[%+v]",
+			gameId, pid, token, t)
 	}
 
 	timestamp, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
-		self.DoLoginReply(constants.INVALID_TIME, "unexpected timestamp", 0)
+		self.DoLoginReply(constants.INVALID_TIME, "unexpected timestamp")
 		return -1
 	}
 
 	config := self.Config.AgentConfig
 	if config.EnableCheckLoginParams && math.Abs(float64(time.Now().Sub(time.Unix(timestamp, 0)))) >= float64(config.TimestampExpireDuration) {
-		self.DoLoginReply(constants.EXPIRED_TIME, "timestamp expired", 0)
+		self.DoLoginReply(constants.EXPIRED_TIME, "timestamp expired")
 		return -1
 	}
 
 	gameInfo := self.DynamicConfig.GetGameInfo(gameId)
 	if gameInfo == nil {
-		self.DoLoginReply(constants.INVALID_GAME_ID, "invalid gameId", 0)
+		self.DoLoginReply(constants.INVALID_GAME_ID, "invalid gameId")
 		return -1
 	}
 
 	if gameInfo.Status != 1 {
-		self.DoLoginReply(constants.GAME_IS_OFF, "game offline", 0)
+		self.DoLoginReply(constants.GAME_IS_OFF, "game offline")
 		return -1
 	}
 
@@ -539,7 +508,7 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	uid, err := g_Server.UCenterMgr.ApplyUid(pid)
 	if err != nil {
 		self.Log.Error("EnterGame  %+v apply err %+v", pid, err)
-		self.DoLoginReply(constants.SYSTEM_ERROR, "system err", 0)
+		self.DoLoginReply(constants.SYSTEM_ERROR, "system err")
 		return -1
 	}
 	self.Pid = pid
@@ -550,7 +519,7 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 		agentMgr.EnterGame(self)
 	})
 
-	self.DoLoginReply(0, "success", 0)
+	self.DoLoginReply(0, "success")
 	return 0
 }
 
@@ -563,13 +532,36 @@ func (self *Agent) ProcGamePushMessage(res *pb.GamePushMessage) {
 	self.Log.Info("ProcGamePushMessage gameId %+v uid %+v protoName %+v ", head.GetGameId(), head.GetUid(), head.GetProtoName())
 	var protoMessage proto.Message
 	proto.Unmarshal(res.GetData(), protoMessage)
-	self.ReplyClient(protoMessage)
+
+	client := &pb.ClientCommonHead{Pid: self.Pid,
+		Sn:        self.Counter.GetIncrementValue(),
+		ProtoName: head.GetProtoName()}
+
+	self.ReplyClient(client, protoMessage)
 }
 
-func (self *Agent) ReplyClient(protoMsg proto.Message) {
-	binary, err := GetBinary(protoMsg, self.Log, self.Config.AgentConfig)
+func (self *Agent) ReplyClient(head *pb.ClientCommonHead, msg proto.Message) {
+	protoName := proto.MessageName(msg)
+	body, err := proto.Marshal(msg)
 	if err != nil {
+		self.Log.Error("ReplyClient protoName marshal body  %+v err %+v ", protoName, err)
 		return
 	}
-	self.SendBinaryNow(binary)
+
+	head.Timestamp = time.Now().Unix()
+	head.ProtoName = protoName
+
+	response := &pb.ClientCommonResponse{
+		Code: constants.CODE_SUCCESS,
+		Head: head,
+		Body: body,
+	}
+
+	res, err := proto.Marshal(response)
+	if err != nil {
+		self.Log.Error("ReplyClient protoName marshal response %+v err %+v", protoName, err)
+		return
+	}
+
+	self.SendBinaryNow(res)
 }

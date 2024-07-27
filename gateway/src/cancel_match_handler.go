@@ -5,10 +5,10 @@ import (
 	"gateway/src/pb"
 )
 
-func (agent *Agent) CancelMatchRequest() {
+func (agent *Agent) CancelMatchHandler(head *pb.ClientCommonHead, request *pb.CancelMatchRequest) {
 	if !agent.IsMatching {
 		agent.Log.Warn("CancelMatchRequest uid %+v is not in matching", agent.Uid)
-		agent.MatchResponse(constants.PLAYER_NO_MATCHING, "player is no in matching")
+		agent.MatchResponse(head, constants.PLAYER_NO_MATCHING, "player is no in matching")
 		return
 	}
 
@@ -16,13 +16,14 @@ func (agent *Agent) CancelMatchRequest() {
 	agent.Server.CancelMatchRequest(agent.GameId, agent.Uid)
 
 	agent.IsMatching = false
-	binary, err := GetBinary(&pb.ClientCancelMatchResponse{
-		Code: 0,
-		Msg:  "success"},
-		agent.Log, agent.Config.AgentConfig)
-	if err != nil {
-		return
-	}
-	agent.SendBinaryNow(binary)
+	agent.CancelMatchResponse(head, constants.CODE_SUCCESS, "")
 
+}
+
+func (agent *Agent) CancelMatchResponse(head *pb.ClientCommonHead, code int32, msg string) {
+	response := &pb.ClientCancelMatchResponse{
+		Code: code,
+		Msg:  msg}
+
+	agent.ReplyClient(head, response)
 }

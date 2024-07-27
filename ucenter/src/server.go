@@ -36,12 +36,13 @@ func NewServer(log *log.Logger) (*Server, error) {
 		Log:       log,
 	}
 
-	monDao, err := mongo.NewDataSource(config.MongoConfig.Address, config.MongoConfig.Name, log)
-	if err != nil {
-		log.Error("NewServer nat mongo err")
-		return nil, err
+	client := mongo.Connect(config.MongoConfig.Address, config.MongoConfig.Name, log)
+	if client == nil {
+		log.Error("NewDataSource err  ")
+		return nil, nil
 	}
-	g_Server.MongoDao = mongo.NewMongoDao(monDao, log)
+
+	g_Server.MongoDao = mongo.NewMongoDao(client, log)
 
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 	g_Server.RedisDao = redisDao
@@ -51,6 +52,8 @@ func NewServer(log *log.Logger) (*Server, error) {
 		log.Error("NewServer nat init err")
 		return nil, err
 	}
+
+	log.Info("nats address %+v success ", config.NatsConfig.Address)
 
 	g_Server.NatsPool = pool
 

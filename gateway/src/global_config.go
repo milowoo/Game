@@ -20,7 +20,7 @@ type GlobalConfig struct {
 type NetworkAsServer struct {
 	ListenIp   string
 	ListenPort int
-	Timeout    time.Duration
+	Timeout    int
 	HMACKey    string
 }
 
@@ -114,7 +114,58 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 		return nil, err
 	}
 
+	ret.Client, err = LoadClientConfig(log)
+	if err != nil {
+		log.Error("get client section key  err ")
+		return nil, err
+	}
+
 	log.Info("NewGlobalConfig  success")
+
+	return ret, nil
+}
+
+func LoadClientConfig(log *log.Logger) (*NetworkAsServer, error) {
+	ret := &NetworkAsServer{}
+	cfg, err := ini.Load(CFG_NAME)
+	if err != nil {
+		log.Error("load file game.ini err ")
+		return nil, err
+	}
+
+	section, err := cfg.GetSection("client")
+	if err != nil {
+		log.Error("get client  err ")
+		return nil, err
+	}
+
+	key, err := section.GetKey("listenIp")
+	if err != nil {
+		log.Error("get client section key listenIp  err ")
+		return nil, err
+	}
+	ret.ListenIp = key.MustString("127.0.0.1")
+
+	key, err = section.GetKey("port")
+	if err != nil {
+		log.Error("get client section key masterName  err ")
+		return nil, err
+	}
+	ret.ListenPort = key.MustInt(36001)
+
+	key, err = section.GetKey("timeout")
+	if err != nil {
+		log.Error("get client section key timeout  err ")
+		return nil, err
+	}
+	ret.Timeout = key.MustInt(10)
+
+	key, err = section.GetKey("hmacKey")
+	if err != nil {
+		log.Error("get client section key hmacKey  err ")
+		return nil, err
+	}
+	ret.HMACKey = key.MustString("xxx")
 
 	return ret, nil
 }
@@ -255,57 +306,6 @@ func NewNatsConfig(log *log.Logger) (*NatsConfig, error) {
 	}
 	ret.Address = key.MustString("127.0.0.1:6377")
 	return ret, nil
-}
-
-func NewNetworkAsServerFromIniFile(cfg *ini.File, sectionName string) (*NetworkAsServer, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("cfg is nil")
-	}
-
-	network := &NetworkAsServer{
-		ListenIp:   "0.0.0.0",
-		ListenPort: -1,
-		Timeout:    0,
-	}
-
-	section, err := cfg.GetSection(sectionName)
-	if err != nil {
-		return nil, err
-	}
-
-	key, err := section.GetKey("listenIp")
-	if err != nil {
-		return nil, err
-	}
-	network.ListenIp = key.String()
-
-	key, err = section.GetKey("listenPort")
-	if err != nil {
-		return nil, err
-	}
-	network.ListenPort = key.MustInt(-1)
-	if network.ListenPort <= 0 {
-		return nil, fmt.Errorf("unexpected listenPort=%d", network.ListenPort)
-	}
-
-	key, err = section.GetKey("timeout")
-	if err != nil {
-		return nil, err
-	}
-
-	seconds := key.MustFloat64(-1.0)
-	if seconds <= 0 {
-		return nil, fmt.Errorf("unexpected timeout=%.02f", seconds)
-	}
-	network.Timeout = time.Duration(seconds * float64(time.Second))
-
-	// optional
-	key, err = section.GetKey("hmacKey")
-	if err == nil {
-		network.HMACKey = key.MustString("")
-	}
-
-	return network, nil
 }
 
 func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {

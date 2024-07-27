@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"fmt"
-	"gateway/src/log"
 	"gateway/src/pb"
 	"github.com/golang/protobuf/proto"
 	"net"
@@ -27,17 +26,13 @@ func GetHostIp() string {
 	return ip
 }
 
-func GetBinary(protoMsg proto.Message, log *log.Logger, agentConfig *AgentConfig) (res []byte, err error) {
+func GetBinary(protoMsg proto.Message) (res []byte, err error) {
 	protoName := proto.MessageName(protoMsg)
-	if agentConfig.EnableLogSend && protoName != "pb.s2cHeart" && protoName != "pb.s2cStrike" {
-		log.Debug("send ==== %s %+v", protoName, protoMsg)
-	}
 	ba := pb.CreateEmpyByteArray()
 	ba.WriteUint8(uint8(len(protoName)))
 	ba.WriteString(protoName)
 	binarybody, err := proto.Marshal(protoMsg)
 	if err != nil {
-		log.Error("proto.Marshal() failed: %+v", err)
 		return nil, err
 	}
 	ba.WriteBytes(binarybody)

@@ -9,13 +9,9 @@ import (
 跟前端的心跳处理
 */
 
-func (agent *Agent) HeartBeatReply() {
-	binary, err := GetBinary(&pb.HeartbeatResponse{
-		Timestamp: time.Now().Unix()},
-		agent.Log, agent.Config.AgentConfig)
-	if err != nil {
-		return
-	}
+func (agent *Agent) HeartBeatHandler(head *pb.ClientCommonHead, request *pb.HeartbeatRequest) {
+	agent.Log.Info("HeartBeatHandler %+v", request)
+	response := &pb.HeartbeatResponse{Timestamp: time.Now().Unix()}
 	agent.GamePing()
-	agent.SendBinaryNow(binary)
+	agent.ReplyClient(head, response)
 }

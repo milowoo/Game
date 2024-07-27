@@ -80,6 +80,8 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
 
+	g_Server.ListenAndServe()
+
 	return g_Server, nil
 }
 

@@ -26,12 +26,12 @@ func NewNatsUCenter(server *Server) *NatsUCenter {
 }
 
 func (self *NatsUCenter) ApplyUid(pid string) (string, error) {
-	self.log.Info("ApplyUid begin pid {}", pid)
+	self.log.Info("ApplyUid begin pid %+v", pid)
 	request, _ := proto.Marshal(&pb.ApplyUidRequest{Pid: pid})
 	var response interface{}
 	err := self.NatsPool.Request(constants.UCENTER_APPLY_UID_SUBJECT, request, &response, 3*time.Second)
 	if err != nil {
-		self.log.Error("applyUid err %+v", err)
+		self.log.Error("applyUid subject %+v err %+v", constants.UCENTER_APPLY_UID_SUBJECT, err)
 		return "", err
 	}
 
@@ -47,5 +47,6 @@ func (self *NatsUCenter) ApplyUid(pid string) (string, error) {
 		self.log.Error("applyUid err %+v %+v", applyResponse.Code, applyResponse.GetMsg())
 		return "", errors.New(applyResponse.GetMsg())
 	}
+
 	return applyResponse.GetUid(), nil
 }

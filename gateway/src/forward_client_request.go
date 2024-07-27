@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-func (agent *Agent) ForwardClientRequest(protoName string, request proto.Message) {
+func (agent *Agent) ForwardClientRequest(client *pb.ClientCommonHead, request proto.Message) {
+	protoName := client.GetProtoName()
 	if len(agent.GameSubject) < 1 {
 		agent.Log.Error("ForwardClientRequest uid %+v protoName %+v invalid", agent.Uid, protoName)
 		return
@@ -55,7 +56,6 @@ func (agent *Agent) ForwardClientRequest(protoName string, request proto.Message
 	} else {
 		var response proto.Message
 		proto.Unmarshal(data.Data, response)
-		agent.ReplyClient(response)
+		agent.ReplyClient(client, response)
 	}
-
 }

@@ -64,7 +64,7 @@ ALL:
 }
 
 func (self *AgentMgr) Frame() {
-	self.Log.Info("frame begin ...")
+	//	self.Log.Info("frame begin ...")
 	self.SetNextFrameId()
 }
 
