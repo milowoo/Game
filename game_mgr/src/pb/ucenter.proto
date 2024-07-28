@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "../pb";
+
+message ApplyUidRequest{
+  string pid = 1;
+}
+
+message ApplyUidResponse{
+  int32 code = 1;
+  string msg = 2;
+  string pid = 3;
+  string uid = 4;
+}

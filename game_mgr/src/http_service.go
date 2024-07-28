@@ -8,7 +8,9 @@ import (
 	"game_mgr/src/log"
 	"game_mgr/src/mongo"
 	"game_mgr/src/mq"
+	"game_mgr/src/pb"
 	"game_mgr/src/redis"
+	"github.com/golang/protobuf/proto"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
@@ -17,6 +19,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 )
 
 // http 服务主要处理匹配回调
@@ -115,6 +118,8 @@ func (server *HttpService) InitNacos(config *GlobalConfig) (config_client.IConfi
 
 func (self *HttpService) Run() {
 	self.listenHttpServer()
+	//self.SubscribeGetUid()
+
 	for {
 		select {
 		case <-self.StopChan:
@@ -122,6 +127,45 @@ func (self *HttpService) Run() {
 			return
 		}
 	}
+}
+
+func (self *HttpService) SubscribeGetUid() {
+	self.Log.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
+
+	// 订阅一个Nats Request 主题
+	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
+		self.Log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		dataType := reflect.TypeOf(msg)
+		self.Log.Info("SubscribeGetUid req type %+v ", dataType)
+		req, _ := ConvertInterfaceToString(msg)
+		var request pb.ApplyUidRequest
+		proto.Unmarshal([]byte(req), &request)
+		self.Log.Info("SubscribeGetUid request pid %+v ", request.GetPid())
+
+		response := &pb.ApplyUidResponse{
+			Code: constants.CODE_SUCCESS,
+			Uid:  "223",
+			Pid:  request.Pid,
+		}
+
+		resByte, _ := proto.Marshal(response)
+
+		self.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(resByte)})
+	})
+
+	if err != nil {
+		self.Log.Error("SubscribeGetUid err %+v", err)
+	}
+}
+
+func ConvertInterfaceToString(data interface{}) (string, error) {
+	// 使用 reflect 包检查 data 是否为 string 类型
+	if reflect.TypeOf(data).Kind() != reflect.String {
+		return "", fmt.Errorf("expected a string, got %T", data)
+	}
+
+	// 如果是 string 类型，返回其数据
+	return data.(string), nil
 }
 
 func (self *HttpService) listenHttpServer() {
@@ -151,7 +195,8 @@ func (self *HttpService) listenHttpServer() {
 			self.AddColoredUidHandler(body, w)
 		case "/deleteColoredUidList":
 			//删除活动染色用户
-			self.DeleteColoredUidHandler(body, w)
+			self.GmCodeHandler(body, w)
+			//self.DeleteColoredUidHandler(body, w)
 		case "/kickColorUidList":
 			//剔除染色用户
 			self.KickColoredUidHandler(body, w)

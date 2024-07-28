@@ -21,15 +21,15 @@ func NewMongoDao(client *Client, log *log.Logger) *MongoDAO {
 }
 
 // 获取设备信息
-func (dao *MongoDAO) GetPlayer(pid string) (*domain.Player, error) {
+func (dao *MongoDAO) GetPlayer(pid string) *domain.Player {
 	c := dao.database.Collection("player")
 	var m domain.Player
 	err := c.FindOne(context.Background(), bson.M{"pid": pid}).Decode(&m)
 	if err != nil {
-		dao.log.Info("GetPlayer err %+v uid %+v ", err, pid)
-		return nil, err
+		dao.log.Debug("GetPlayer err %+v uid %+v ", err, pid)
+		return nil
 	}
-	return &m, nil
+	return &m
 }
 
 func (dao *MongoDAO) InsertPlayer(player *domain.Player) error {

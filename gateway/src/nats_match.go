@@ -63,6 +63,31 @@ func (self *NatsMatch) SubjectMatchResponse() {
 	})
 }
 
+func (self *NatsMatch) SubscribeGetUid() {
+	self.log.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
+
+	// 订阅一个Nats Request 主题
+	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
+		self.log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+
+		natsMsg, ok := msg.(*nats.Msg)
+		if ok {
+			self.log.Info("SubscribeGetUid 111 %+v", natsMsg.Subject)
+		}
+		//if ok {
+		//	self.GetPlayerUID(reply, natsMsg)
+		//} else {
+		//	self.log.Error("SubscribeGetUid Failed to convert interface{} to *nats.Msg")
+		//}
+
+	})
+
+	if err != nil {
+		self.log.Error("SubscribeGetUid err %+v", err)
+	}
+
+}
+
 func (self *NatsMatch) CancelMatchRequest(gameId string, uid string) error {
 	matchReq := &pb.CancelMatchRequest{
 		GameId: gameId,
@@ -89,6 +114,8 @@ func (self *NatsMatch) Run() {
 	self.log.Info("nats match  begin ....")
 
 	self.SubjectMatchResponse()
+
+	self.SubscribeGetUid()
 
 	self.Server.WaitGroup.Add(1)
 	defer func() {

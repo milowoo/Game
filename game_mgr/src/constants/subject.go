@@ -6,6 +6,7 @@ const (
 	CANCEL_MATCH_SUBJECT       = "cancel_match.req.subj"
 	CREATE_ROOM_NOTICE_SUBJECT = "create.room.notice."
 	GM_CODE_SUBJECT            = "gm.code.subj."
+	UCENTER_APPLY_UID_SUBJECT  = "ucenter.apply.uid"
 )
 
 func GetCreateRoomNoticeSubject(gameId, groupId string) string {
@@ -14,4 +15,8 @@ func GetCreateRoomNoticeSubject(gameId, groupId string) string {
 
 func GetGmCodeSubject(gameId string) string {
 	return GM_CODE_SUBJECT + gameId
+}
+
+func GetGameSubject(gameId string, ip string) string {
+	return "game." + gameId + "." + ip
 }
