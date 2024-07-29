@@ -41,7 +41,6 @@ func (c *Connection) Dial(addr string) error {
 
 // Upstream ...
 func (c *Connection) Upstream(message proto.Message) error {
-
 	d, err := proto.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("channel marshal upstream pb fail: %v", err)
@@ -52,7 +51,7 @@ func (c *Connection) Upstream(message proto.Message) error {
 
 	err = c.conn.WriteMessage(websocket.BinaryMessage, d)
 	if err != nil {
-		return fmt.Errorf("channel write message to conn fail: %v", err)
+		return err
 	}
 
 	return nil

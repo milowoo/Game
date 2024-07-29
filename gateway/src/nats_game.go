@@ -5,7 +5,7 @@ import (
 	"gateway/src/log"
 	"gateway/src/mq"
 	"gateway/src/pb"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/nats-io/go-nats"
 )
 

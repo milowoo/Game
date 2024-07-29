@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"time"
 )
 
 var g_Server *Server
@@ -42,6 +43,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 	g_Server = &Server{
 		Config:    config,
 		WaitGroup: &sync.WaitGroup{},
+		MatchMgr:  make(map[string]*GameMatch),
 		Log:       log,
 	}
 
@@ -152,14 +154,20 @@ func (self *Server) Run() {
 
 	go self.DynamicConfig.Run()
 
+	// 让程序暂停2秒,让 gameInfo 都导入到内存
+	time.Sleep(2 * time.Second)
+
+	go self.NatsService.Run()
+
+	go self.SubscribeGame.Run()
+
 	gameMap := self.DynamicConfig.GetAllGame()
 	for _, game := range gameMap {
+		self.Log.Info("match run gameId %+v", game.GameId)
 		gameMatch := NewGameMatch(self, game)
 		go gameMatch.Run()
 		self.MatchMgr[game.GameId] = gameMatch
 	}
-
-	go self.NatsService.Run()
 
 	// wait exit
 	c := make(chan os.Signal)

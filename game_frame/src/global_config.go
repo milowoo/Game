@@ -1,7 +1,6 @@
 package game_frame
 
 import (
-	"fmt"
 	"game_frame/src/log"
 	"github.com/go-ini/ini"
 )
@@ -40,12 +39,12 @@ type MongoConfig struct {
 }
 
 const (
-	CFG_DIR = "../conf"
+	CFG_NAME = "/Users/wuchuangeng/game/game_frame/conf/game.ini"
 )
 
 func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 	ret := &GlobalConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", CFG_DIR))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +110,7 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 
 func LoadNatsConfig(log *log.Logger) (*NatsConfig, error) {
 	ret := &NatsConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -134,7 +133,7 @@ func LoadNatsConfig(log *log.Logger) (*NatsConfig, error) {
 
 func LoadRedisConfig(log *log.Logger) (*RedisConfig, error) {
 	ret := &RedisConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -172,7 +171,7 @@ func LoadRedisConfig(log *log.Logger) (*RedisConfig, error) {
 
 func LoadMongoConfig(log *log.Logger) (*MongoConfig, error) {
 	ret := &MongoConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -203,7 +202,7 @@ func LoadMongoConfig(log *log.Logger) (*MongoConfig, error) {
 
 func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
 	ret := &NacosConfig{}
-	cfg, err := ini.Load(fmt.Sprintf("%s/game.ini", "../conf"))
+	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
 		return nil, err
@@ -215,7 +214,7 @@ func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
 		return nil, err
 	}
 
-	key, err := section.GetKey("Ip")
+	key, err := section.GetKey("ip")
 	if err != nil {
 		log.Error("get nacos section key Ip  err ")
 		return nil, err

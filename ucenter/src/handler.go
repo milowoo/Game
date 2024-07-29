@@ -1,9 +1,7 @@
 package ucenter
 
 import (
-	"fmt"
 	"github.com/golang/protobuf/proto"
-	"reflect"
 	"strconv"
 	"ucenter/src/constants"
 	"ucenter/src/log"
@@ -71,40 +69,17 @@ func (self *HandlerMgr) SubscribeGetUid() {
 	// 订阅一个Nats Request 主题
 	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
 		self.log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
-		dataType := reflect.TypeOf(msg)
-		self.log.Info("SubscribeGetUid req type %+v ", dataType)
 		req, _ := ConvertInterfaceToString(msg)
 		var request pb.ApplyUidRequest
 		proto.Unmarshal([]byte(req), &request)
 		self.log.Info("SubscribeGetUid request pid %+v ", request.GetPid())
 
 		self.GetPlayerUID(reply, &request)
-
-		//response := &pb.ApplyUidResponse{
-		//	Code: constants.CODE_SUCCESS,
-		//	Uid:  "223",
-		//	Pid:  request.Pid,
-		//}
-		//
-		//resByte, _ := proto.Marshal(response)
-		//
-		//self.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(resByte)})
-
 	})
 
 	if err != nil {
 		self.log.Error("SubscribeGetUid err %+v", err)
 	}
-}
-
-func ConvertInterfaceToString(data interface{}) (string, error) {
-	// 使用 reflect 包检查 data 是否为 string 类型
-	if reflect.TypeOf(data).Kind() != reflect.String {
-		return "", fmt.Errorf("expected a string, got %T", data)
-	}
-
-	// 如果是 string 类型，返回其数据
-	return data.(string), nil
 }
 
 func (self *HandlerMgr) Quit() {

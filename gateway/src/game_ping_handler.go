@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"gateway/src/pb"
-	"reflect"
+	"github.com/golang/protobuf/proto"
 	"time"
 )
 
@@ -15,7 +15,6 @@ func (agent *Agent) GamePing() {
 		Timestamp: time.Now().Unix(),
 	}
 
-	typ := reflect.TypeOf(request)
-	protoName := typ.Elem().Name()
-	agent.PublicToGame(protoName, request)
+	protoName := proto.MessageName(request)
+	agent.RequestToGame(protoName, request)
 }

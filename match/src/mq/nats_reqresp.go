@@ -73,7 +73,7 @@ func (self *NatsPool) SubscribeForRequest(subject string, f RequestMsgHandler) e
 		return err
 	}
 	defer self.Put(conn)
-	encodedConn, err := nats.NewEncodedConn(conn, nats.DEFAULT_ENCODER)
+	encodedConn, err := nats.NewEncodedConn(conn, nats.JSON_ENCODER)
 	if err != nil {
 		return err
 	}

@@ -1,13 +1,14 @@
-package handler
+package game_frame
 
 import (
 	"game_frame/src/constants"
 	"game_frame/src/pb"
+	"github.com/golang/protobuf/proto"
 )
 
 func (self *Room) LoginHall(reply string, head *pb.CommonHead, request *pb.LoginHallRequest) {
 	self.isHall = true
-
+	self.Log.Info("LoginHall reply: %s", reply)
 	//查询用户的游戏信息存放在内存中
 	uid := head.Uid
 	if self.IsFirstLogin(uid) {
@@ -21,5 +22,7 @@ func (self *Room) LoginHall(reply string, head *pb.CommonHead, request *pb.Login
 		Msg:  "",
 	}
 
+	self.Log.Info("LoginHall reply: %s 1111", reply)
+	head.ProtoName = proto.MessageName(response)
 	self.ResponseGateway(reply, head, response)
 }

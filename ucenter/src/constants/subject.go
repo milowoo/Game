@@ -10,7 +10,7 @@ const (
 )
 
 func GetCreateRoomNoticeSubject(gameId, groupId string) string {
-	return CREATE_ROOM_NOTICE_SUBJECT + gameId + groupId
+	return CREATE_ROOM_NOTICE_SUBJECT + gameId + "." + groupId
 }
 
 func GetGmCodeSubject(gameId string) string {

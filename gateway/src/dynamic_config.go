@@ -16,7 +16,6 @@ type DynamicConfig struct {
 	log         *log.Logger
 	GameMap     map[string]*domain.GameInfo
 	Client      config_client.IConfigClient
-	gameChange  chan string
 	exit        chan bool
 }
 
@@ -28,7 +27,6 @@ func NewDynamicConfig(server *Server) *DynamicConfig {
 		log:         server.Log,
 		GameMap:     make(map[string]*domain.GameInfo),
 		Client:      server.ConfigClient,
-		gameChange:  make(chan string, 100),
 		exit:        make(chan bool, 1),
 	}
 
@@ -57,7 +55,7 @@ func (self *DynamicConfig) Run() {
 		Group:  self.NacosConfig.GameGroup,
 		OnChange: func(namespace, group, dataId, data string) {
 			self.log.Info("config changed group: %+v dataId: %v content: %+v", group, dataId, data)
-			self.gameChange <- data
+			self.syncGameData(data)
 		},
 	})
 
@@ -67,14 +65,6 @@ func (self *DynamicConfig) Run() {
 		case <-self.exit:
 			{
 				return
-			}
-
-		case <-self.gameChange:
-			{
-				gameId := <-self.gameChange
-				if len(gameId) > 1 {
-					self.syncGameData(gameId)
-				}
 			}
 
 		default:

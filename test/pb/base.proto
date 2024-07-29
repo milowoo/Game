@@ -75,9 +75,11 @@ message ClientLoginHallRequest{
 message ClientLoginHallResponse{
     int32 code = 1;
     string msg = 2;
-    bool  jumpGame = 3;
-    string roomId = 4;
-    string opt = 5;
+}
+
+message JumpGameRoomNoticeRes {
+    string roomId = 1;
+    string opt = 2;
 }
 
 message ClientMatchRequest {
@@ -110,8 +112,8 @@ message ClientMatchOverRes {
 }
 
 message LoadProgressRequest {
-    int32 progress  = 1;
-    string sn = 2;
+   int32 progress  = 1;
+   string sn = 2;
 }
 
 message Progress {
@@ -158,3 +160,10 @@ message HeartbeatRequest {
 message HeartbeatResponse {
     int64 timestamp = 1; // 服务器时间戳
 }
+
+
+
+
+
+
+

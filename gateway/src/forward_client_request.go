@@ -3,8 +3,7 @@ package gateway
 import (
 	"gateway/src/constants"
 	"gateway/src/pb"
-	"github.com/gogo/protobuf/proto"
-	"github.com/nats-io/go-nats"
+	"github.com/golang/protobuf/proto"
 	"time"
 )
 
@@ -34,7 +33,7 @@ func (agent *Agent) ForwardClientRequest(client *pb.ClientCommonHead, request pr
 	commonBytes, _ := proto.Marshal(commonRequest)
 
 	var response interface{}
-	err := agent.Server.NatsPool.Request(agent.GameSubject, commonBytes, &response, 3*time.Second)
+	err := agent.Server.NatsPool.Request(agent.GameSubject, string(commonBytes), &response, 3*time.Second)
 	if err != nil {
 		if agent.RequestGameErrFrame == 0 {
 			agent.RequestGameErrFrame = agent.FrameID
@@ -43,9 +42,11 @@ func (agent *Agent) ForwardClientRequest(client *pb.ClientCommonHead, request pr
 		return
 	}
 	agent.RequestGameErrFrame = 0
-	data, _ := response.(*nats.Msg)
+
+	dataMap := response.(map[string]interface{})
+	commonResBytes := []byte(dataMap["data"].(string))
 	var res pb.GameCommonResponse
-	err = proto.Unmarshal(data.Data, &res)
+	err = proto.Unmarshal(commonResBytes, &res)
 	if err != nil {
 		agent.Log.Error("ForwardNeedResponse err %+v", err)
 		return
@@ -55,7 +56,7 @@ func (agent *Agent) ForwardClientRequest(client *pb.ClientCommonHead, request pr
 		agent.Log.Error("ForwardClientRequest uid %+v protoName %+v err", agent.Uid, protoName)
 	} else {
 		var response proto.Message
-		proto.Unmarshal(data.Data, response)
+		proto.Unmarshal(res.Data, response)
 		agent.ReplyClient(client, response)
 	}
 }

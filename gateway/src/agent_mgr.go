@@ -107,6 +107,7 @@ func (self *AgentMgr) EnterGame(agent *Agent) {
 }
 
 func (self *AgentMgr) loseConnect(agent *Agent) {
+	self.Log.Info("agent mgr lose connect uid %+v ....", agent.Uid)
 	delete(self.uid2Agent, agent.Uid)
 }
 

@@ -92,7 +92,7 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		MsgFromAgentMgr:      make(chan Closure, 512),
 		FrameID:              1,
 		ConnectTimeFrame:     1,
-		IsMatching:           true,
+		IsMatching:           false,
 		InHall:               0,
 		NextCheckPingFrame:   int(ClientPingInterval / AgentFrameInterval),
 		delayDisconnectTimer: timer,
@@ -105,7 +105,7 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		RequestGameErrFrame:  0,
 		Counter:              &AtomicCounter{},
 	}
-	log.Info("receive connect %+v", values)
+	log.Info("NewAgent receive connect %+v", values)
 	self.MsgFromAgentMgr <- func() {
 		self.LoginGame(values.Get("gameId"), values.Get("timestamp"), values.Get("pid"), values.Get("token"))
 	}
@@ -121,20 +121,31 @@ func (self *Agent) readPump() {
 	}()
 
 	for {
-		_, msg, err := self.Conn.ReadMessage()
+		t, msg, err := self.Conn.ReadMessage()
 		if err != nil {
+			self.Log.Error("readPump ReadMessage %+v", err)
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
 				self.RecvQueue <- func() { self.onMultiError(err) }
 			}
-
 			break
 		}
 
 		self.LastPingTimeFrame = self.FrameID
 
+		self.Log.Info("readPump ReadMessage %+v", t)
+
+		if t == websocket.TextMessage {
+			self.RecvQueue <- func() { self.OnText(string(msg[:])) }
+			continue
+		}
+
 		// t == websocket.BinaryMessage
 		self.RecvQueue <- func() { self.OnBinary(msg) }
 	}
+}
+
+func (self *Agent) OnText(msg string) {
+	self.Log.Info("on longer supports text message %s", msg)
 }
 
 func (self *Agent) writePump() {
@@ -147,6 +158,7 @@ func (self *Agent) writePump() {
 		s, ok := <-self.SendQueue
 		if !ok {
 			// close channel.
+			self.Log.Info("writePump close channel ....")
 			self.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 			break
 		}
@@ -185,7 +197,10 @@ func (self *Agent) onMultiError(err error) {
 func (self *Agent) Run() {
 	self.Conn.SetReadLimit(MaxMsgSize)
 	self.Conn.SetPingHandler(func(string) error {
-		self.RecvQueue <- func() { self.SendQueue <- &SendEvent{t: websocket.PongMessage, msg: []byte{}} }
+		self.RecvQueue <- func() {
+
+			self.SendQueue <- &SendEvent{t: websocket.PongMessage, msg: []byte{}}
+		}
 		return nil
 	})
 
@@ -241,6 +256,7 @@ func (self *Agent) SendBinaryNow(msg []byte) {
 读取客户端的请求， 进行业务处理
 */
 func (self *Agent) OnBinary(msg []byte) {
+	self.Log.Info("OnBinary begin ... ")
 	var request pb.ClientCommonRequest
 	err := proto.Unmarshal(msg, &request)
 	if err != nil {
@@ -251,18 +267,7 @@ func (self *Agent) OnBinary(msg []byte) {
 	// 协议名
 	protoName := request.GetHead().ProtoName
 
-	protoType := proto.MessageType(protoName)
-	if protoType == nil {
-		self.Log.Error("OnBinary uid %v did not find proto ===== %s", self.Uid, protoName)
-		return
-	}
-
-	var protoBody proto.Message
-	err = proto.Unmarshal(request.Body, protoBody)
-	if err != nil {
-		self.Log.Error("OnBinary invalid body message uid %v read proto err %+v", self.Uid, err)
-		return
-	}
+	self.Log.Info("OnBinary protoName %+v ", protoName)
 
 	//检验游戏是否在开放
 	if !self.checkGameOpen() {
@@ -272,27 +277,41 @@ func (self *Agent) OnBinary(msg []byte) {
 
 	//如果不是心跳包，则需要转发给游戏服务
 	if protoName == "pb.HeartbeatRequest" {
-		self.HeartBeatHandler(request.GetHead(), protoBody.(*pb.HeartbeatRequest))
+		var protoBody pb.HeartbeatRequest
+		err = proto.Unmarshal(request.Body, &protoBody)
+		self.HeartBeatHandler(request.GetHead(), &protoBody)
 		return
 	}
 
 	if protoName == "pb.ClientLoginHallRequest" {
-		self.LoginHallHandler(request.GetHead(), protoBody.(*pb.ClientLoginHallRequest))
+		var protoBody pb.ClientLoginHallRequest
+		err = proto.Unmarshal(request.Body, &protoBody)
+		self.LoginHallHandler(request.GetHead(), &protoBody)
 		return
 	}
 	if protoName == "pb.ClientMatchRequest" {
 		//发起匹配请求
-		self.MatchHandler(request.GetHead(), protoBody.(*pb.ClientMatchRequest))
+		var protoBody pb.ClientMatchRequest
+		err = proto.Unmarshal(request.Body, &protoBody)
+		self.MatchHandler(request.GetHead(), &protoBody)
 		return
 	}
 
 	if protoName == "pb.ClientCancelMatchRequest" {
 		//发起取消匹配请求
-		self.CancelMatchHandler(request.GetHead(), protoBody.(*pb.CancelMatchRequest))
+		var protoBody pb.CancelMatchRequest
+		err = proto.Unmarshal(request.Body, &protoBody)
+		self.CancelMatchHandler(request.GetHead(), &protoBody)
 		return
 	}
 
 	//转发消息给游戏服务器，并接收应答给客户端
+	var protoBody proto.Message
+	err = proto.Unmarshal(request.Body, protoBody)
+	if err != nil {
+		self.Log.Error("OnBinary invalid body message uid %v read proto err %+v", self.Uid, err)
+		return
+	}
 	self.ForwardClientRequest(request.GetHead(), protoBody)
 
 }
@@ -300,12 +319,12 @@ func (self *Agent) OnBinary(msg []byte) {
 func (self *Agent) checkGameOpen() bool {
 	gameInfo := self.DynamicConfig.GetGameInfo(self.GameId)
 	if gameInfo == nil {
-		self.Log.Warn("LoginHallRequest uid %+v get game info err gameId %+v", self.Uid, self.GameId)
+		self.Log.Warn("checkGameOpen uid %+v get game info err gameId %+v", self.Uid, self.GameId)
 		return false
 	}
 
 	if gameInfo.Status != 1 {
-		self.Log.Warn("LoginHallRequest uid %+v game status %+v err gameId %+v", self.Uid, gameInfo.Status, self.GameId)
+		self.Log.Warn("checkGameOpen uid %+v game status %+v err gameId %+v", self.Uid, gameInfo.Status, self.GameId)
 		self.DelayDisconnect(5)
 		return false
 	}
@@ -407,6 +426,10 @@ func (self *Agent) CloseConnect() {
 }
 
 func (self *Agent) checkInvalidAgent() {
+	if self.InHall != 0 {
+		return
+	}
+
 	pingElapseTime := time.Duration(self.FrameID-self.ConnectTimeFrame) * AgentFrameInterval
 	if pingElapseTime < ClientCheckLoginTimeout {
 		return
@@ -453,15 +476,19 @@ func (self *Agent) checkGameException() {
 	if self.RequestGameErrFrame == 0 {
 		return
 	}
+	self.Log.Info("checkGameException %v", self.RequestGameErrFrame)
 	if self.RequestGameErrFrame < self.FrameID-int(CheckGameExceptionInternal/AgentFrameInterval) {
 		//如果是在大厅，则需要游戏服创建大厅
 		if self.InHall == 1 {
-			self.LonginHall2Match()
+			head := &pb.ClientCommonHead{
+				Pid: self.Pid,
+			}
+			self.LoginHall2Match(head)
 			return
 		}
 		self.notifyLostAgent(false)
 
-		self.Log.Info("checkInvalidAgent uid %v delayDisconnect: ping timeout", self.Uid)
+		self.Log.Info("checkGameException uid %v delayDisconnect: ping timeout", self.Uid)
 		self.DelayDisconnect(0)
 	}
 }
@@ -511,15 +538,17 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 		self.DoLoginReply(constants.SYSTEM_ERROR, "system err")
 		return -1
 	}
+
 	self.Pid = pid
 	self.Uid = uid
+	self.GameId = gameId
 
 	//反射到agentMgr
 	RunOnAgentMgr(self.AgentMgr.MsgFromAgent, self.AgentMgr, func(agentMgr *AgentMgr) {
 		agentMgr.EnterGame(self)
 	})
 
-	self.DoLoginReply(0, "success")
+	self.DoLoginReply(constants.CODE_SUCCESS, "success")
 	return 0
 }
 

@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"gateway/src/pb"
-	"reflect"
+	"github.com/golang/protobuf/proto"
 )
 
 func UserExitHandler(agent *Agent, reason int32) {
@@ -15,7 +15,6 @@ func UserExitHandler(agent *Agent, reason int32) {
 		Reason: reason,
 	}
 
-	typ := reflect.TypeOf(request)
-	protoName := typ.Elem().Name()
-	agent.PublicToGame(protoName, request)
+	protoName := proto.MessageName(request)
+	agent.RequestToGame(protoName, request)
 }

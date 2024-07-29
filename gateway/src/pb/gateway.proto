@@ -51,3 +51,17 @@ message GamePushMessage{
     PushHead head = 1;
     bytes data = 2;
 }
+
+//进入大厅
+message LoginHallRequest{
+
+}
+
+//进入大厅应答
+message LoginHallResponse{
+    int32 code = 1;
+    string msg = 2;
+    bool  jumpGame = 3;
+    string roomId = 4;
+    string opt = 5;
+}

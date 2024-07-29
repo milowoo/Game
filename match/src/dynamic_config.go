@@ -52,6 +52,11 @@ func (self *DynamicConfig) Run() {
 		},
 	})
 
+	self.Server.WaitGroup.Add(1)
+	defer func() {
+		self.Server.WaitGroup.Done()
+	}()
+
 	for {
 		// 优先查看exit，
 		select {
@@ -93,7 +98,6 @@ func (self *DynamicConfig) syncGameData(gameId string) {
 	var gameInfo domain.GameInfo
 	json.Unmarshal([]byte(data), &gameInfo)
 	self.GameMap[gameId] = &gameInfo
-
 }
 
 func (self *DynamicConfig) GetAllGame() map[string]*domain.GameInfo {

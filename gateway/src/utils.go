@@ -2,8 +2,6 @@ package gateway
 
 import (
 	"fmt"
-	"gateway/src/pb"
-	"github.com/golang/protobuf/proto"
 	"net"
 	"sync/atomic"
 )
@@ -24,19 +22,6 @@ func GetHostIp() string {
 		}
 	}
 	return ip
-}
-
-func GetBinary(protoMsg proto.Message) (res []byte, err error) {
-	protoName := proto.MessageName(protoMsg)
-	ba := pb.CreateEmpyByteArray()
-	ba.WriteUint8(uint8(len(protoName)))
-	ba.WriteString(protoName)
-	binarybody, err := proto.Marshal(protoMsg)
-	if err != nil {
-		return nil, err
-	}
-	ba.WriteBytes(binarybody)
-	return ba.Bytes(), nil
 }
 
 type Closure = func()

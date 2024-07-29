@@ -5,7 +5,7 @@ import (
 	"gateway/src/log"
 	"gateway/src/mq"
 	"gateway/src/pb"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/nats-io/go-nats"
 	"time"
 )
@@ -28,7 +28,7 @@ func NewNatsMatch(sever *Server) *NatsMatch {
 		MsgFromServer:  make(chan Closure, 2*1024),
 		receiveSubject: constants.GetMatchResultSubject(GetHostIp()),
 		exit:           make(chan bool, 1),
-		isQuit:         true,
+		isQuit:         false,
 	}
 }
 
@@ -43,8 +43,8 @@ func (self *NatsMatch) MatchRequest(gameId string, uid string, score int32, opt 
 	}
 
 	request, _ := proto.Marshal(matchReq)
-
-	err := self.NatsPool.Publish(constants.MATCH_SUBJECT, request)
+	var response interface{}
+	err := self.NatsPool.Request(constants.MATCH_SUBJECT, string(request), &response, 3*time.Second)
 	if err != nil {
 		self.log.Error("MatchRequest gameId %+v uid %+v match err %+v", err)
 		return err
@@ -63,31 +63,6 @@ func (self *NatsMatch) SubjectMatchResponse() {
 	})
 }
 
-func (self *NatsMatch) SubscribeGetUid() {
-	self.log.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
-
-	// 订阅一个Nats Request 主题
-	err := self.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
-		self.log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
-
-		natsMsg, ok := msg.(*nats.Msg)
-		if ok {
-			self.log.Info("SubscribeGetUid 111 %+v", natsMsg.Subject)
-		}
-		//if ok {
-		//	self.GetPlayerUID(reply, natsMsg)
-		//} else {
-		//	self.log.Error("SubscribeGetUid Failed to convert interface{} to *nats.Msg")
-		//}
-
-	})
-
-	if err != nil {
-		self.log.Error("SubscribeGetUid err %+v", err)
-	}
-
-}
-
 func (self *NatsMatch) CancelMatchRequest(gameId string, uid string) error {
 	matchReq := &pb.CancelMatchRequest{
 		GameId: gameId,
@@ -95,9 +70,10 @@ func (self *NatsMatch) CancelMatchRequest(gameId string, uid string) error {
 	}
 
 	request, _ := proto.Marshal(matchReq)
-	err := self.NatsPool.Publish(constants.CANCEL_MATCH_SUBJECT, request)
+	var response interface{}
+	err := self.NatsPool.Request(constants.CANCEL_MATCH_SUBJECT, string(request), &response, 3*time.Second)
 	if err != nil {
-		self.log.Error("MatchRequest gameId %+v uid %+v match err %+v", err)
+		self.log.Error("MatchRequest gameId %+v uid %+v match err %+v", gameId, uid, err)
 		return err
 	}
 	return nil
@@ -114,8 +90,6 @@ func (self *NatsMatch) Run() {
 	self.log.Info("nats match  begin ....")
 
 	self.SubjectMatchResponse()
-
-	self.SubscribeGetUid()
 
 	self.Server.WaitGroup.Add(1)
 	defer func() {
@@ -144,7 +118,9 @@ func (self *NatsMatch) Quit() {
 	if self.isQuit {
 		return
 	}
+
 	self.log.Info("NatsMatch quit")
 	self.isQuit = true
+	self.Server.NatsPool.Unsubscribe(self.receiveSubject)
 	self.exit <- true
 }

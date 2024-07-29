@@ -81,6 +81,7 @@ func (self *Server) Quit() {
 	self.NatsService.Quit()
 	self.RoomMgr.Quit()
 	self.DynamicConfig.Quit()
+
 	self.WaitGroup.Done()
 }
 
@@ -172,7 +173,7 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 		return nil, nil, err
 	}
 
-	log.Error("RegisterServiceInstance,param:%+v,result:%+v ", param, success)
+	log.Info("RegisterServiceInstance,param:%+v,result:%+v ", param, success)
 
 	return configClient, client, nil
 }

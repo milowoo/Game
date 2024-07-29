@@ -2,15 +2,15 @@ package gateway
 
 import (
 	"gateway/src/pb"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"time"
 )
 
-func (agent *Agent) PublicToGame(protoName string, protoMsg proto.Message) {
+func (agent *Agent) RequestToGame(protoName string, protoMsg proto.Message) ([]byte, error) {
 	agent.Log.Info("PublicToGame protoName %+v", protoName)
 	if len(agent.GameSubject) < 1 {
 		agent.Log.Error("PublicToGame invalid request %+v", protoName)
-		return
+		return nil, nil
 	}
 
 	head := &pb.CommonHead{
@@ -30,14 +30,18 @@ func (agent *Agent) PublicToGame(protoName string, protoMsg proto.Message) {
 
 	comBytes, _ := proto.Marshal(commonRequest)
 	var response interface{}
-	err := agent.Server.NatsPool.Request(agent.GameSubject, comBytes, &response, 1*time.Second)
+	err := agent.Server.NatsPool.Request(agent.GameSubject, string(comBytes), &response, 3*time.Second)
 	if err != nil {
 		agent.Log.Error("uid %v protoName %v public to game game err %+v", agent.Uid, protoName, err)
 		if agent.RequestGameErrFrame == 0 {
 			agent.RequestGameErrFrame = agent.FrameID
 		}
 
-		return
+		return nil, err
 	}
 	agent.RequestGameErrFrame = 0
+
+	dataMap := response.(map[string]interface{})
+	resBytes := []byte(dataMap["data"].(string))
+	return resBytes, nil
 }

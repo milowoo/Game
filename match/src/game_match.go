@@ -54,7 +54,7 @@ func NewGameMatch(server *Server, gameInfo *domain.GameInfo) *GameMatch {
 		FrameID:     0,
 		NextFrameId: 0,
 		frameTicker: nil,
-		MsgFromNats: make(chan Closure, 2048),
+		MsgFromNats: make(chan Closure, 10*1024),
 		rand:        rand.New(rand.NewSource(now.Unix())),
 		Counter:     &AtomicCounter{},
 		exit:        make(chan bool, 1),
@@ -69,25 +69,35 @@ func (self *GameMatch) Run() {
 		}
 	}()
 
+	self.log.Info("game match %+v begin ...", self.gameId)
+
 	self.frameTicker = time.NewTicker(GAME_FRAME_INTERVAL)
 	defer func() {
 		self.frameTicker.Stop()
 	}()
 
+	self.Server.WaitGroup.Add(1)
+	defer func() {
+		self.Server.WaitGroup.Done()
+	}()
+
+ALL:
 	for {
 		// 优先查看exit，
 		select {
 		case <-self.exit:
 			return
-		default:
-			// do nothing
-		}
-
-		select {
+		case c, ok := <-self.MsgFromNats:
+			if !ok {
+				break ALL
+			}
+			SafeRunClosure(self, c)
 		case <-self.frameTicker.C:
 			SafeRunClosure(self, func() {
 				self.Frame()
 			})
+		default:
+			// do nothing
 		}
 	}
 }
@@ -165,9 +175,13 @@ func (self *GameMatch) Frame() {
 func (self *GameMatch) PublicCreateRoom(roomId string) string {
 	subject := constants.GetCreateRoomNoticeSubject(self.GameInfo.GameId, self.GameInfo.GroupName)
 	var response interface{}
-	self.Server.NatsPool.Request(subject, []byte(roomId), response, 1*time.Second)
-	str, _ := response.(string)
-	return str
+	self.log.Info("PublicCreateRoom %+v roomId %+v", subject, roomId)
+	self.Server.NatsPool.Request(subject, roomId, &response, 1*time.Second)
+	self.log.Info("PublicCreateRoom roomId %+v response: %+v", roomId, response)
+	dataMap := response.(map[string]interface{})
+	hostIp := dataMap["data"].(string)
+
+	return hostIp
 }
 
 func (self *GameMatch) GenRoomId() string {
@@ -207,7 +221,8 @@ func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId strin
 	}
 
 	res, _ := proto.Marshal(response)
-	self.Server.NatsPool.Publish(matchReq.GetReceiveSubject(), res)
+
+	self.Server.NatsPool.Publish(matchReq.GetReceiveSubject(), string(res))
 }
 
 func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []*pb.MatchData, roomId string, gameIp string) {
@@ -224,7 +239,7 @@ func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []
 	}
 
 	res, _ := proto.Marshal(response)
-	self.Server.NatsPool.Publish(matchReq.GetReceiveSubject(), res)
+	self.Server.NatsPool.Publish(matchReq.GetReceiveSubject(), string(res))
 }
 
 func (self *GameMatch) Compressed(req *pb.MatchRequest) []byte {
@@ -288,7 +303,7 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 		}
 
 		res, _ := proto.Marshal(response)
-		self.Server.NatsPool.Publish(req.GetReceiveSubject(), res)
+		self.Server.NatsPool.Publish(req.GetReceiveSubject(), string(res))
 	} else {
 		buf := self.Compressed(req)
 		// 将压缩后的数据存储到 Redis 中
@@ -337,6 +352,7 @@ func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
 }
 
 func (self *GameMatch) LoginHallRequest(reply string, req *pb.CreateHallRequest) {
+	self.log.Info("LoginHallRequest  req %+v game %+v", req.GetUid(), req.GetGameId())
 	roomId := self.gameId + "_hall_" + req.GetUid()
 
 	gameIp := self.PublicCreateRoom(roomId)
@@ -351,7 +367,7 @@ func (self *GameMatch) LoginHallRequest(reply string, req *pb.CreateHallRequest)
 	}
 
 	res, _ := proto.Marshal(response)
-	self.Server.NatsPool.Publish(reply, res)
+	self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 }
 func (self *GameMatch) Quit() {
 	self.exit <- true

@@ -2,12 +2,10 @@ package game_frame
 
 import (
 	"game_frame/src/constants"
-	"game_frame/src/handler"
 	"game_frame/src/log"
 	"game_frame/src/pb"
 	"game_frame/src/redis"
-	"github.com/gogo/protobuf/proto"
-	"github.com/nats-io/go-nats"
+	"github.com/golang/protobuf/proto"
 	"math/rand"
 	"sync"
 	"time"
@@ -32,8 +30,8 @@ type RoomMgr struct {
 	roomMutex sync.Mutex
 
 	frameTimer            *time.Ticker
-	id2Room               map[string]*handler.Room
-	innerId2Room          map[string]*handler.Room
+	id2Room               map[string]*Room
+	innerId2Room          map[string]*Room
 	innerId2RoomId        map[string]string
 	roomId2InnerId        map[string]string
 	frameId               int
@@ -55,7 +53,7 @@ func NewRoomMgr(sever *Server) *RoomMgr {
 
 		rand:       rand.New(rand.NewSource(now.Unix())),
 		frameTimer: time.NewTicker(RoomMgrFrameInterval),
-		id2Room:    make(map[string]*handler.Room, 0),
+		id2Room:    make(map[string]*Room, 0),
 
 		frameId:               0,
 		nextLogRoomCountFrame: 0,
@@ -106,17 +104,10 @@ func (self *RoomMgr) Frame() {
 
 func (self *RoomMgr) Quit() {
 	// 通知所有room强制存储并退出
-	natsService := self.Server.NatsService
 	for _, room := range self.id2Room {
-		RunOnRoom(room.MsgFromMgr, room, func(input *handler.Room) {
+		RunOnRoom(room.MsgFromMgr, room, func(input *Room) {
 			input.SaveAndQuit()
 		})
-
-		if natsService != nil {
-			RunOnNatsService(natsService.MsgFromRoomMgr, natsService, func(natsService *NatsService) {
-				natsService.UnsubscribeRoom(room.RoomId)
-			})
-		}
 	}
 
 	for len(self.id2Room) > 0 {
@@ -125,17 +116,20 @@ func (self *RoomMgr) Quit() {
 	}
 }
 
-func (self *RoomMgr) ProcessGatewayRequest(reply string, msg *nats.Msg) {
+func (self *RoomMgr) ProcessGatewayRequest(reply string, msg interface{}) {
+	self.Log.Info("process gateway request begin .....")
 	var commonReq pb.GameCommonRequest
 	commonRes := &pb.GameCommonResponse{}
-	proto.Unmarshal(msg.Data, &commonReq)
+
+	req, _ := ConvertInterfaceToString(msg)
+	proto.Unmarshal([]byte(req), &commonReq)
 	head := commonReq.GetHead()
 	if head.GetGameId() != self.Server.Config.GameId {
-		self.Log.Error("ProcessGatewayRequest invalid nat data %+v ", msg.Data)
+		self.Log.Error("ProcessGatewayRequest invalid nat data %+v ", commonReq.GetHead().GameId)
 		commonRes.Code = constants.INVALID_BODY
 		commonRes.Msg = "Unmarshal request err"
 		res, _ := proto.Marshal(commonRes)
-		self.Server.NatsPool.Publish(reply, res)
+		self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 		return
 	}
 
@@ -146,17 +140,21 @@ func (self *RoomMgr) ProcessGatewayRequest(reply string, msg *nats.Msg) {
 	if room == nil {
 		self.Log.Error("ProcessGatewayRequest invalid proto %+v gameId %+v uid %+v",
 			head.ProtoName, head.GetRoomId(), head.GetUid())
+		commonRes.Code = constants.SYSTEM_ERROR
+		commonRes.Msg = "system err"
+		res, _ := proto.Marshal(commonRes)
+		self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 		return
 	}
 
-	RunOnRoom(room.MsgFromMgr, room, func(input *handler.Room) {
+	RunOnRoom(room.MsgFromMgr, room, func(input *Room) {
 		room.ApplyProtoHandler(reply, head, request)
 	})
 
 	return
 }
 
-func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *handler.Room {
+func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *Room {
 	//先判断房间是否在使用中
 	room, ok := self.id2Room[head.RoomId]
 	if ok {
@@ -168,7 +166,7 @@ func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *handler.Room {
 		return nil
 	}
 
-	room, err := handler.NewRoom(self, head.RoomId)
+	room, err := NewRoom(self, head.RoomId)
 	if err != nil {
 		self.Log.Error("big err create room err %s", head.RoomId)
 		return nil
@@ -191,8 +189,4 @@ func (self *RoomMgr) MakeRoomEnd(roomId string) {
 	self.roomMutex.Lock()
 	delete(self.id2Room, roomId)
 	self.roomMutex.Unlock()
-	natsService := self.Server.NatsService
-	RunOnNatsService(natsService.MsgFromRoomMgr, natsService, func(natsService *NatsService) {
-		natsService.UnsubscribeRoom(roomId)
-	})
 }

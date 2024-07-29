@@ -48,6 +48,11 @@ func (self *NatsService) Run() {
 		}
 	}()
 
+	self.Server.WaitGroup.Add(1)
+	defer func() {
+		self.Server.WaitGroup.Done()
+	}()
+
 	//监听匹配创建房间信息
 	self.subscribeMatch()
 	//监听GM信息
@@ -78,18 +83,15 @@ func (self *NatsService) Run() {
 
 func (self *NatsService) subscribeMatch() {
 	// 订阅一个Nats Request 主题
+	self.log.Info("subscribeMatch subject %+v ", self.matchCreateRoomSubject)
 	err := self.NatsPool.SubscribeForRequest(self.matchCreateRoomSubject, func(subj, reply string, msg interface{}) {
 		self.log.Info("Nats subscribeMatch request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 
-		natsMsg, ok := msg.(*nats.Msg)
-		if ok {
-			roomId := string(natsMsg.Data)
-			hostIp := GetHostIp()
+		roomId := msg.(string)
+		hostIp := GetHostIp()
 
-			self.log.Error("subscribeMatch roomId %+v hostIp %+v", roomId, hostIp)
-			self.NatsPool.Publish(reply, []byte(hostIp))
-		}
-
+		self.log.Info("subscribeMatch roomId %+v hostIp %+v", roomId, hostIp)
+		self.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": hostIp})
 	})
 
 	if err != nil {
@@ -100,18 +102,14 @@ func (self *NatsService) subscribeMatch() {
 
 func (self *NatsService) subscribeGateway() {
 	// 订阅一个Nats Request 主题
+	self.log.Info("subscribeGateway subject %+v ", self.gameSubject)
 	err := self.NatsPool.SubscribeForRequest(self.gameSubject, func(subj, reply string, msg interface{}) {
-		self.log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		self.log.Info("subscribeGateway request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 
-		natsMsg, ok := msg.(*nats.Msg)
-		if ok {
-			roomMgr := self.Server.RoomMgr
-			RunOnRoomMgr(roomMgr.MsgFromNats, roomMgr, func(roomMgr *RoomMgr) {
-				roomMgr.ProcessGatewayRequest(reply, natsMsg)
-			})
-			self.log.Error("subscribeGateway Failed to convert interface{} to *nats.Msg")
-		}
-
+		roomMgr := self.Server.RoomMgr
+		RunOnRoomMgr(roomMgr.MsgFromNats, roomMgr, func(roomMgr *RoomMgr) {
+			roomMgr.ProcessGatewayRequest(reply, msg)
+		})
 	})
 
 	if err != nil {
@@ -132,17 +130,9 @@ func (self *NatsService) processGmCode(data []byte) {
 
 }
 
-func (self *NatsService) getRoomSubject(roomId string) string {
-	subject := "game." + self.Config.GameId + "." + roomId
-	return subject
-}
-
-func (self *NatsService) UnsubscribeRoom(roomId string) {
-}
-
 func (self *NatsService) Quit() {
-	self.NatsPool.Unsubscribe(self.matchCreateRoomSubject)
-	self.NatsPool.Unsubscribe(self.gmSubject)
+	self.log.Info("nats service quit ....")
+	self.NatsPool.Unsubscribe(self.matchCreateRoomSubject, self.gameSubject, self.gmSubject)
 
 	self.exit <- true
 }

@@ -1,28 +1,18 @@
 package ucenter
 
 import (
-	"math/rand"
+	"fmt"
+	"reflect"
 )
 
 type Closure = func()
 
-func SafeRunClosure(v interface{}, c Closure) {
-	defer func() {
-		if err := recover(); err != nil {
-			//log.Printf("%+v: %s", err, debug.Stack())
-
-		}
-	}()
-
-	c()
-}
-
-func RunOnHandler(c chan Closure, mgr *HandlerMgr, cb func(mgr *HandlerMgr)) {
-	c <- func() {
-		cb(mgr)
+func ConvertInterfaceToString(data interface{}) (string, error) {
+	// 使用 reflect 包检查 data 是否为 string 类型
+	if reflect.TypeOf(data).Kind() != reflect.String {
+		return "", fmt.Errorf("expected a string, got %T", data)
 	}
-}
 
-func RandomInt(rand *rand.Rand, min int64, maxPlus1 int64) int64 {
-	return min + rand.Int63n((maxPlus1 - min))
+	// 如果是 string 类型，返回其数据
+	return data.(string), nil
 }

@@ -105,6 +105,7 @@ func spawnClient(n int64) stresstest.Client {
 		IsHall:         true,
 		IsMatch:        false,
 		IsFirst:        true,
+		IsLoginGame:    false,
 		IsGameOver:     false,
 	}
 }
@@ -122,6 +123,7 @@ type MessageClient struct {
 	IsLoadProgress bool
 	IsMatch        bool
 	IsFirst        bool
+	IsLoginGame    bool
 	IsGameOver     bool
 	Log            *log2.Logger
 }
@@ -131,7 +133,6 @@ func (c *MessageClient) getReportSeq(seq int64) interface{} {
 }
 
 func (c *MessageClient) Receive(down *pb.ClientCommonResponse) {
-	//ylog.Info(fmt.Sprintf("uid %v Receive  body Name %v", c.Uid, down.BodyName))
 	bodyName := down.GetHead().ProtoName
 	if down.Code != 100 {
 		gLog.Error("Receive err code %+v msg %+v proto name %+v",
@@ -164,86 +165,14 @@ func (c *MessageClient) Receive(down *pb.ClientCommonResponse) {
 			return
 		}
 
+		gLog.Info("login resp uid %+v", res.Uid)
+
 		c.Uid = res.GetUid()
+
+		c.IsLoginGame = true
+
 	}
 
-	//if down.BodyName == "pb.LoginResponse" {
-	//	var res pb.LoadProgressRes
-	//	res.Unmarshal(down.Body)
-	//
-	//	isLoad := false
-	//	for _, v := range res.GetData() {
-	//		if v.Uid == c.Uid {
-	//			isLoad = true
-	//		}
-	//	}
-	//
-	//	if isLoad {
-	//		c.IsLoadProgress = true
-	//		if c.IsHall {
-	//			c.MatchReq()
-	//		}
-	//	}
-	//
-	//	return
-	//}
-	//
-	//if down.BodyName == "pb.StartMatchRes" {
-	//	messageMatch.AddSuccess(c.getReportSeq(down.Seq))
-	//}
-	//
-	//if down.BodyName == "pb.MatchOverRes" {
-	//	var res pb.MatchOverRes
-	//	res.Unmarshal(down.Body)
-	//	//ylog.Info(fmt.Sprintf("match res %v ", res))
-	//	if res.GetCode() == 0 {
-	//		messageMatch.AddSuccess(c.getReportSeq(down.Seq))
-	//	} else {
-	//		messageMatch.AddFail(c.getReportSeq(down.Seq))
-	//	}
-	//
-	//	c.LeaveRoom()
-	//
-	//	c.IsEnterRoom = false
-	//	c.IsLoadProgress = false
-	//
-	//	time.Sleep(time.Duration(1) * time.Second)
-	//
-	//	c.EndGameRoom(res)
-	//
-	//	c.IsEnterRoom = true
-	//	return
-	//}
-	//
-	//if down.BodyName == "pb.TestRes" {
-	//	//ylog.Info(fmt.Sprintf("TestRes seq %v", down.Seq))
-	//	var res pb.TestRes
-	//	res.Unmarshal(down.Body)
-	//	ylog.Info(fmt.Sprintf("uid %v test down seq %v", c.Uid, down.Seq))
-	//	if res.GetCode() == 0 {
-	//		messageTest.AddSuccess(c.getReportSeq(down.Seq))
-	//	} else {
-	//		messageTest.AddFail(c.getReportSeq(down.Seq))
-	//	}
-	//}
-	//
-	//if down.BodyName == "pb.DBTestRes" {
-	//	//ylog.Info(fmt.Sprintf("DBTestRes seq %v", down.Seq))
-	//	var res pb.DBTestRes
-	//	res.Unmarshal(down.Body)
-	//	if res.GetCode() == 0 {
-	//		messageDBTest.AddSuccess(c.getReportSeq(down.Seq))
-	//	} else {
-	//		messageDBTest.AddFail(c.getReportSeq(down.Seq))
-	//	}
-	//}
-	//
-	//if down.BodyName == "pb.GameOverRes" {
-	//	c.IsGameOver = true
-	//	/* var res pb.GameOverRes
-	//	res.Unmarshal(down.Body)
-	//	ylog.Info(fmt.Sprintf("game over %v", res)) */
-	//}
 }
 
 // Connect ...
@@ -282,8 +211,11 @@ func (c *MessageClient) HeartBeat() {
 
 	err := c.Conn.Upstream(request)
 	if err != nil {
+		gLog.Error("message client send ping upstream fail: %+v", err)
 		fmt.Println("message client send ping upstream fail: %v", err)
 	}
+
+	gLog.Info("message client send ping upstream success")
 
 }
 
@@ -291,8 +223,11 @@ func (c *MessageClient) SendEndHall() {
 	if c.IsEnterRoom {
 		return
 	}
+	if !c.IsLoginGame {
+		return
+	}
 
-	gLog.Info(fmt.Sprintf("uid %v enter Hall", c.Uid))
+	gLog.Info("send end hall uid %+v", c.Uid)
 	enterRoomReq := &pb.ClientLoginHallRequest{}
 	bytes, _ := proto.Marshal(enterRoomReq)
 	head := &pb.ClientCommonHead{
@@ -309,11 +244,13 @@ func (c *MessageClient) SendEndHall() {
 
 	err := c.Conn.Upstream(request)
 	if err != nil {
-		fmt.Println("message client send ping upstream fail: %v", err)
+		gLog.Info("message client send ping upstream fail: %v", err)
 	}
 
-	messageEnterHall.AddRequest(c.getReportSeq(head.GetSn()))
+	gLog.Info("SendEndHall end hall success")
 
+	messageEnterHall.AddRequest(c.getReportSeq(head.GetSn()))
+	c.IsFirst = false
 	c.IsHall = true
 
 	return
@@ -503,7 +440,6 @@ func (c *MessageClient) Execute() error {
 	c.ExcuteNum++
 	if c.IsFirst {
 		c.SendEndHall()
-		c.IsFirst = false
 	}
 
 	c.HeartBeat()

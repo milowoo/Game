@@ -2,8 +2,8 @@ package game_frame
 
 import (
 	"fmt"
-	"game_frame/src/handler"
 	"net"
+	"reflect"
 	"sync/atomic"
 )
 
@@ -44,16 +44,20 @@ func RunOnRoomMgr(c chan Closure, mgr *RoomMgr, cb func(mgr *RoomMgr)) {
 	}
 }
 
-func RunOnRoom(c chan Closure, room *handler.Room, cb func(room *handler.Room)) {
+func RunOnRoom(c chan Closure, room *Room, cb func(room *Room)) {
 	c <- func() {
 		cb(room)
 	}
 }
 
-func RunOnNatsService(c chan Closure, natsService *NatsService, cb func(natsService *NatsService)) {
-	c <- func() {
-		cb(natsService)
+func ConvertInterfaceToString(data interface{}) (string, error) {
+	// 使用 reflect 包检查 data 是否为 string 类型
+	if reflect.TypeOf(data).Kind() != reflect.String {
+		return "", fmt.Errorf("expected a string, got %T", data)
 	}
+
+	// 如果是 string 类型，返回其数据
+	return data.(string), nil
 }
 
 // AtomicCounter 是一个使用原子操作实现的线程安全计数器

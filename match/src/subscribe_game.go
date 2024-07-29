@@ -52,6 +52,11 @@ func (self *SubscribeGame) Run() {
 		self.SubscribeGame(gameId)
 	}
 
+	self.Server.WaitGroup.Add(1)
+	defer func() {
+		self.Server.WaitGroup.Done()
+	}()
+
 	for {
 		// 优先查看exit，
 		select {

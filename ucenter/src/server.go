@@ -71,6 +71,7 @@ func (self *Server) Quit() {
 		return
 	}
 
+	self.Log.Info("server is quit")
 	self.isQuit = true
 	self.Handler.Quit()
 
