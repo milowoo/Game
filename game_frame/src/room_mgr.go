@@ -29,13 +29,9 @@ type RoomMgr struct {
 	rand      *rand.Rand
 	roomMutex sync.Mutex
 
-	frameTimer            *time.Ticker
-	id2Room               map[string]*Room
-	innerId2Room          map[string]*Room
-	innerId2RoomId        map[string]string
-	roomId2InnerId        map[string]string
-	frameId               int
-	nextLogRoomCountFrame int
+	frameTimer *time.Ticker
+	id2Room    map[string]*Room
+	frameId    int
 
 	isQuit bool
 	exit   chan bool
@@ -45,6 +41,7 @@ func NewRoomMgr(sever *Server) *RoomMgr {
 	now := time.Now()
 	roomMgr := &RoomMgr{
 		Server:        sever,
+		Log:           sever.Log,
 		MsgFromNats:   make(chan Closure, 10*1024),
 		MsgFromRoom:   make(chan Closure, 2*1024),
 		GlobalConfig:  sever.Config,
@@ -55,10 +52,9 @@ func NewRoomMgr(sever *Server) *RoomMgr {
 		frameTimer: time.NewTicker(RoomMgrFrameInterval),
 		id2Room:    make(map[string]*Room, 0),
 
-		frameId:               0,
-		nextLogRoomCountFrame: 0,
-		isQuit:                false,
-		exit:                  make(chan bool, 1),
+		frameId: 0,
+		isQuit:  false,
+		exit:    make(chan bool, 1),
 	}
 
 	return roomMgr
@@ -76,7 +72,7 @@ func (self *RoomMgr) Run() {
 	defer func() {
 		self.Server.WaitGroup.Done()
 	}()
-
+ALL:
 	for {
 		// 优先查看exit，
 		select {
@@ -85,9 +81,12 @@ func (self *RoomMgr) Run() {
 				self.Quit()
 				return
 			}
-		case c := <-self.MsgFromNats:
+		case c, ok := <-self.MsgFromNats:
+			if !ok {
+				break ALL
+			}
 			SafeRunClosure(self, c)
-		case c := <-self.MsgFromRoom:
+		case c, _ := <-self.MsgFromRoom:
 			SafeRunClosure(self, c)
 		case <-self.frameTimer.C:
 			SafeRunClosure(self, func() {
@@ -114,18 +113,18 @@ func (self *RoomMgr) Quit() {
 		c := <-self.MsgFromRoom
 		SafeRunClosure(self, c)
 	}
+	self.Log.Info("room mgr quit ...")
 }
 
 func (self *RoomMgr) ProcessGatewayRequest(reply string, msg interface{}) {
-	self.Log.Info("process gateway request begin .....")
-	var commonReq pb.GameCommonRequest
-	commonRes := &pb.GameCommonResponse{}
+	dataMap := msg.(map[string]interface{})
+	head, data := ConvertRequest(dataMap)
+	self.Log.Info("ProcessGatewayRequest uid %v  roomId %+v proto Name [%+v] hostIp [%v].....",
+		head.GetUid(), head.GetRoomId(), head.GetPbName(), head.GetGatewayIp())
 
-	req, _ := ConvertInterfaceToString(msg)
-	proto.Unmarshal([]byte(req), &commonReq)
-	head := commonReq.GetHead()
 	if head.GetGameId() != self.Server.Config.GameId {
-		self.Log.Error("ProcessGatewayRequest invalid nat data %+v ", commonReq.GetHead().GameId)
+		commonRes := &pb.GameCommonResponse{}
+		self.Log.Error("ProcessGatewayRequest invalid nat data %+v ", head.GameId)
 		commonRes.Code = constants.INVALID_BODY
 		commonRes.Msg = "Unmarshal request err"
 		res, _ := proto.Marshal(commonRes)
@@ -133,13 +132,11 @@ func (self *RoomMgr) ProcessGatewayRequest(reply string, msg interface{}) {
 		return
 	}
 
-	var request proto.Message
-	proto.Unmarshal(commonReq.GetData(), request)
-
 	room := self.GetOrCreateRoom(head)
 	if room == nil {
-		self.Log.Error("ProcessGatewayRequest invalid proto %+v gameId %+v uid %+v",
-			head.ProtoName, head.GetRoomId(), head.GetUid())
+		commonRes := &pb.GameCommonResponse{}
+		self.Log.Error("ProcessGatewayRequest invalid proto [%+v] roomId [%+v] uid [%+v]",
+			head.GetPbName(), head.GetRoomId(), head.GetUid())
 		commonRes.Code = constants.SYSTEM_ERROR
 		commonRes.Msg = "system err"
 		res, _ := proto.Marshal(commonRes)
@@ -148,7 +145,7 @@ func (self *RoomMgr) ProcessGatewayRequest(reply string, msg interface{}) {
 	}
 
 	RunOnRoom(room.MsgFromMgr, room, func(input *Room) {
-		room.ApplyProtoHandler(reply, head, request)
+		room.ApplyProtoHandler(reply, head, data)
 	})
 
 	return
@@ -162,11 +159,12 @@ func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *Room {
 	}
 
 	//如果不是进入房间/ 大厅的协议，就是非法的请求
-	if head.ProtoName != "pb.LoginHallRequest" && head.ProtoName != "pb.LoginRoomRequest" {
+	if head.GetPbName() != "pb.LoginHallRequest" && head.GetPbName() != "pb.LoginRoomRequest" {
+		self.Log.Info("GetOrCreateRoom invalid request proto name %+v", head.GetPbName())
 		return nil
 	}
 
-	room, err := NewRoom(self, head.RoomId)
+	newRoom, err := NewRoom(self, head.RoomId)
 	if err != nil {
 		self.Log.Error("big err create room err %s", head.RoomId)
 		return nil
@@ -178,11 +176,11 @@ func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *Room {
 		return checkRoom
 	}
 
-	self.id2Room[head.RoomId] = room
+	self.id2Room[head.RoomId] = newRoom
 	self.roomMutex.Unlock()
 
-	go room.Run()
-	return room
+	go newRoom.Run()
+	return newRoom
 }
 
 func (self *RoomMgr) MakeRoomEnd(roomId string) {

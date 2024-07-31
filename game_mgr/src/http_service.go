@@ -119,6 +119,7 @@ func (server *HttpService) InitNacos(config *GlobalConfig) (config_client.IConfi
 func (self *HttpService) Run() {
 	self.listenHttpServer()
 	//self.SubscribeGetUid()
+	//self.subscribeGateway()
 
 	for {
 		select {
@@ -155,6 +156,32 @@ func (self *HttpService) SubscribeGetUid() {
 
 	if err != nil {
 		self.Log.Error("SubscribeGetUid err %+v", err)
+	}
+}
+
+func (self *HttpService) subscribeGateway() {
+	// 订阅一个Nats Request 主题
+	err := self.NatsPool.SubscribeForRequest("test.subject", func(subj, reply string, msg interface{}) {
+		self.Log.Info("subscribeGateway request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+
+		self.Log.Info("subscribeGateway 11111")
+
+		dataMap := msg.(map[string]interface{})
+
+		bytes := []byte(dataMap["data"].(string))
+		var request pb.ApplyUidRequest
+		proto.Unmarshal(bytes, &request)
+		self.Log.Info("SubscribeForRequest %+v", request)
+
+		self.Log.Info("ProcessGatewayRequest uid %v  roomId %+v proto Name [%+v] hostIp [%v].....",
+			dataMap["Uid"], dataMap["RoomId"], dataMap["PbName"], dataMap["GatewayIp"])
+
+		self.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": "11111"})
+
+	})
+
+	if err != nil {
+		self.Log.Error("subscribeGateway err %+v", err)
 	}
 }
 

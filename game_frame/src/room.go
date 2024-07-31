@@ -101,6 +101,7 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 	now := time.Now()
 	self := &Room{
 		RoomMgr:       roomMgr,
+		Log:           roomMgr.Log,
 		NatPool:       roomMgr.Server.NatsPool,
 		RedisDao:      roomMgr.RedisDao,
 		GlobalConfig:  roomMgr.GlobalConfig,
@@ -147,28 +148,32 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 	return self, nil
 }
 
-func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, msg proto.Message) {
+func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, data []byte) {
 	self.Log.Info("ApplyProtoHandler reply: %s", reply)
-	method, ok := self.protocol2Method[head.ProtoName]
-	if !ok {
-		self.Log.Info("method not found: %+v", head.ProtoName)
-		commonRes := &pb.GameCommonResponse{}
-		commonRes.Code = constants.SYSTEM_ERROR
-		commonRes.Msg = "system err"
-		res, _ := proto.Marshal(commonRes)
-		self.NatPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+	//method, ok := self.protocol2Method[head.ProtoName]
+	//if !ok {
+	//	self.Log.Info("method not found: %+v", head.ProtoName)
+	//	commonRes := &pb.GameCommonResponse{}
+	//	commonRes.Code = constants.SYSTEM_ERROR
+	//	commonRes.Msg = "system err"
+	//	res, _ := proto.Marshal(commonRes)
+	//	self.NatPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+	//
+	//	return
+	//}
 
-		return
+	if head.GetPbName() == "pb.LoginHallRequest" {
+		self.LoginHall(reply, head, data)
 	}
 
-	self.Log.Info("ApplyProtoHandler 1111")
-	in := []reflect.Value{
-		reflect.ValueOf(reply),
-		reflect.ValueOf(head),
-		reflect.ValueOf(msg),
-	}
-	method.Call(in)
-	self.Log.Info("ApplyProtoHandler 2222")
+	//self.Log.Info("ApplyProtoHandler 1111")
+	//in := []reflect.Value{
+	//	reflect.ValueOf(reply),
+	//	reflect.ValueOf(head),
+	//	reflect.ValueOf(msg),
+	//}
+	//method.Call(in)
+	//self.Log.Info("ApplyProtoHandler 2222")
 }
 
 func (self *Room) Run() {
@@ -182,7 +187,6 @@ func (self *Room) Run() {
 	self.frameTicker = time.NewTicker(ROOM_FRAME_INTERVAL)
 
 	self.state = constants.ROOM_STATE_LOAD
-	//self.stateTimeoutFrame = self.frameId + int32(ROOM_WAITING_READY_TIME/ROOM_FRAME_INTERVAL)
 
 	defer func() {
 		self.frameTicker.Stop()
@@ -193,11 +197,6 @@ func (self *Room) Run() {
 		select {
 		case <-self.exit:
 			return
-		default:
-			// do nothing
-		}
-
-		select {
 		case <-self.frameTicker.C:
 			SafeRunClosure(self, func() {
 				self.frameId++
@@ -207,6 +206,10 @@ func (self *Room) Run() {
 				}
 				self.Frame()
 			})
+		case c, _ := <-self.MsgFromMgr:
+			SafeRunClosure(self, c)
+		default:
+			// do nothing
 		}
 	}
 }
@@ -225,10 +228,10 @@ func (self *Room) ResponseGateway(reply string, head *pb.CommonHead, response pr
 		Code: constants.CODE_SUCCESS,
 		Msg:  "",
 		Head: head,
-		Data: bytes,
+		Data: string(bytes),
 	}
 
-	self.Log.Info("ResponseGateway reply: %+v protoName %+v", reply, head.ProtoName)
+	self.Log.Info("ResponseGateway reply: %+v protoName %+v", reply, head.GetPbName())
 
 	commBytes, _ := proto.Marshal(res)
 	self.RoomMgr.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(commBytes)})
@@ -256,13 +259,13 @@ func (self *Room) Send2PlayerMessage(player *GamePlayer, msg proto.Message) {
 		Pid:       player.Pid,
 		Timestamp: time.Now().Unix(),
 		RoomId:    self.RoomId,
-		ProtoName: protoName,
+		PbName:    protoName,
 		Sn:        self.Counter.GetIncrementValue(),
 	}
 
 	data := &pb.GamePushMessage{
 		Head: head,
-		Data: bytes,
+		Data: string(bytes),
 	}
 	res, _ := proto.Marshal(data)
 	self.NatPool.Publish(constants.GetGamePushDataSubject(player.GatewayIp), map[string]interface{}{"res": "ok", "data": string(res)})

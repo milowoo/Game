@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"gateway/src/pb"
 	"github.com/golang/protobuf/proto"
+	"strconv"
 	"time"
 )
 
@@ -13,24 +13,24 @@ func (agent *Agent) RequestToGame(protoName string, protoMsg proto.Message) ([]b
 		return nil, nil
 	}
 
-	head := &pb.CommonHead{
-		GameId:    agent.GameId,
-		Uid:       agent.Uid,
-		RoomId:    agent.RoomId,
-		Sn:        agent.Counter.GetIncrementValue(),
-		Timestamp: time.Now().Unix(),
-		ProtoName: protoName,
-	}
-
 	bytes, _ := proto.Marshal(protoMsg)
-	commonRequest := &pb.GameCommonRequest{
-		Head: head,
-		Data: bytes,
+
+	head := map[string]interface{}{
+		"gameId":    agent.GameId,
+		"uid":       agent.Uid,
+		"roomId":    agent.RoomId,
+		"pid":       agent.Pid,
+		"sn":        strconv.FormatInt(agent.Counter.GetIncrementValue(), 10),
+		"timestamp": strconv.FormatInt(time.Now().Unix(), 10),
+		"pbName":    protoName,
+		"gatewayIp": GetHostIp(),
+		"data":      string(bytes),
 	}
 
-	comBytes, _ := proto.Marshal(commonRequest)
 	var response interface{}
-	err := agent.Server.NatsPool.Request(agent.GameSubject, string(comBytes), &response, 3*time.Second)
+	agent.Log.Info("RequestToGame uid %+v roomId %+v protoName %+v HostIp %+v",
+		agent.Uid, agent.RoomId, protoName, GetHostIp())
+	err := agent.Server.NatsPool.Request(agent.GameSubject, head, &response, 3*time.Second)
 	if err != nil {
 		agent.Log.Error("uid %v protoName %v public to game game err %+v", agent.Uid, protoName, err)
 		if agent.RequestGameErrFrame == 0 {

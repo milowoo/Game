@@ -21,13 +21,13 @@ func (agent *Agent) ForwardClientRequest(client *pb.ClientCommonHead, request pr
 		Uid:       agent.Uid,
 		RoomId:    agent.RoomId,
 		Sn:        agent.Counter.GetIncrementValue(),
-		ProtoName: protoName,
-		HostIp:    GetHostIp(),
+		PbName:    protoName,
+		GatewayIp: GetHostIp(),
 	}
 
 	commonRequest := &pb.GameCommonRequest{
 		Head: head,
-		Data: bytes,
+		Data: string(bytes),
 	}
 
 	commonBytes, _ := proto.Marshal(commonRequest)
@@ -56,7 +56,7 @@ func (agent *Agent) ForwardClientRequest(client *pb.ClientCommonHead, request pr
 		agent.Log.Error("ForwardClientRequest uid %+v protoName %+v err", agent.Uid, protoName)
 	} else {
 		var response proto.Message
-		proto.Unmarshal(res.Data, response)
+		proto.Unmarshal([]byte(res.Data), response)
 		agent.ReplyClient(client, response)
 	}
 }

@@ -6,13 +6,19 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-func (self *Room) LoginHall(reply string, head *pb.CommonHead, request *pb.LoginHallRequest) {
+func (self *Room) LoginHall(reply string, head *pb.CommonHead, data []byte) {
 	self.isHall = true
 	self.Log.Info("LoginHall reply: %s", reply)
+	var request pb.LoginHallRequest
+	err := proto.Unmarshal(data, &request)
+	if err != nil {
+		self.Log.Info("LoginHall proto.Unmarshal err: %s", err.Error())
+	}
+
 	//查询用户的游戏信息存放在内存中
 	uid := head.Uid
 	if self.IsFirstLogin(uid) {
-		player := NewPlayer(head.GetRoomId(), head.GetUid(), head.GetPid(), head.GetHostIp(), false)
+		player := NewPlayer(head.GetRoomId(), head.GetUid(), head.GetPid(), head.GetGatewayIp(), false)
 		self.Players = append(self.Players, player)
 	}
 
@@ -22,7 +28,7 @@ func (self *Room) LoginHall(reply string, head *pb.CommonHead, request *pb.Login
 		Msg:  "",
 	}
 
-	self.Log.Info("LoginHall reply: %s 1111", reply)
-	head.ProtoName = proto.MessageName(response)
+	self.Log.Info("LoginHall reply: uid %+v success", uid)
+	head.PbName = proto.MessageName(response)
 	self.ResponseGateway(reply, head, response)
 }

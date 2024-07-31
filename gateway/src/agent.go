@@ -558,13 +558,13 @@ func (self *Agent) CallMatchResponse(res *pb.MatchOverRes) {
 
 func (self *Agent) ProcGamePushMessage(res *pb.GamePushMessage) {
 	head := res.GetHead()
-	self.Log.Info("ProcGamePushMessage gameId %+v uid %+v protoName %+v ", head.GetGameId(), head.GetUid(), head.GetProtoName())
+	self.Log.Info("ProcGamePushMessage gameId %+v uid %+v protoName %+v ", head.GetGameId(), head.GetUid(), head.GetPbName())
 	var protoMessage proto.Message
-	proto.Unmarshal(res.GetData(), protoMessage)
+	proto.Unmarshal([]byte(res.GetData()), protoMessage)
 
 	client := &pb.ClientCommonHead{Pid: self.Pid,
 		Sn:        self.Counter.GetIncrementValue(),
-		ProtoName: head.GetProtoName()}
+		ProtoName: head.GetPbName()}
 
 	self.ReplyClient(client, protoMessage)
 }

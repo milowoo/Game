@@ -65,7 +65,7 @@ func (self *NatsGame) SubjectGamePushData() {
 		_ = proto.Unmarshal(mess.Data, &pushData)
 		head := pushData.GetHead()
 		self.log.Info("SubjectGamePushData gameId %+v uid %+v pid %+v protoName %+v",
-			head.GetGameId(), head.GetUid(), head.GetPid(), head.GetProtoName())
+			head.GetGameId(), head.GetUid(), head.GetPid(), head.GetPbName())
 		// uid 找出对应的 agent 进行匹配结果处理
 		self.Server.AgentMgr.GamePushDataNotice(&pushData)
 	})

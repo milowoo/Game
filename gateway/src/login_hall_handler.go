@@ -87,7 +87,7 @@ func (agent *Agent) LoginGameHall(head *pb.ClientCommonHead) *pb.LoginHallRespon
 
 	//发起进入大厅请求
 	agent.Log.Info("LoginGameHall begin %+v GameSubject %+v", agent.Uid, agent.GameSubject)
-	protoName := proto.MessageName(request)
+	protoName := "pb.LoginHallRequest"
 	response, err := agent.RequestToGame(protoName, request)
 	if err != nil {
 		agent.Log.Error("LoginGameHall err %+v", err)

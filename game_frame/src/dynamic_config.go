@@ -54,6 +54,11 @@ func (self *DynamicConfig) Run() {
 		},
 	})
 
+	self.Server.WaitGroup.Add(1)
+	defer func() {
+		self.Server.WaitGroup.Done()
+	}()
+
 	for {
 		// 优先查看exit，
 		select {
@@ -87,6 +92,7 @@ func (self *DynamicConfig) syncGameData(gameId string) {
 }
 
 func (self *DynamicConfig) Quit() {
+	self.log.Info(" dynamic config quit game")
 	self.exit <- true
 }
 

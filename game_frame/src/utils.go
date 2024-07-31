@@ -2,8 +2,10 @@ package game_frame
 
 import (
 	"fmt"
+	"game_frame/src/pb"
 	"net"
 	"reflect"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -58,6 +60,27 @@ func ConvertInterfaceToString(data interface{}) (string, error) {
 
 	// 如果是 string 类型，返回其数据
 	return data.(string), nil
+}
+
+// map[data: gameId:test4 gatewayIp:192.168.10.2 pbName:pb.LoginHallRequest roomId:test4_hall_1054 sn:2 timestamp:1.722344216e+09 uid:1054]
+func ConvertRequest(dataMap map[string]interface{}) (*pb.CommonHead, []byte) {
+	timestamp, _ := strconv.ParseInt(dataMap["timestamp"].(string), 10, 64)
+	sn, _ := strconv.ParseInt(dataMap["sn"].(string), 10, 64)
+
+	head := &pb.CommonHead{
+		GameId:    dataMap["gameId"].(string),
+		RoomId:    dataMap["roomId"].(string),
+		Uid:       dataMap["uid"].(string),
+		Pid:       dataMap["pid"].(string),
+		Sn:        sn,
+		Timestamp: timestamp,
+		PbName:    dataMap["pbName"].(string),
+		GatewayIp: dataMap["gatewayIp"].(string),
+	}
+
+	data := dataMap["data"].(string)
+
+	return head, []byte(data)
 }
 
 // AtomicCounter 是一个使用原子操作实现的线程安全计数器

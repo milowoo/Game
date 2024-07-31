@@ -18,14 +18,14 @@ message CommonHead {
     string pid = 4;
     int64  sn = 5;
     int64  timestamp = 6;
-    string protoName = 7;
-    string hostIp   = 8;
+    string pbName = 7;
+    string gatewayIp   = 8;
 
 }
 
 message GameCommonRequest{
     CommonHead head = 1;
-    bytes data = 2;
+    string data = 2;
 }
 
 
@@ -33,7 +33,7 @@ message GameCommonResponse{
     int32 code = 1;
     string msg = 2;
     CommonHead head = 3;
-    bytes data = 6;
+    string data = 4;
 }
 
 
@@ -44,12 +44,12 @@ message PushHead {
     string pid = 4;
     int64  sn = 5;
     int64  timestamp = 6;
-    string protoName = 7;
+    string pbName = 7;
 }
 
 message GamePushMessage{
     PushHead head = 1;
-    bytes data = 2;
+    string data = 2;
 }
 
 //进入大厅

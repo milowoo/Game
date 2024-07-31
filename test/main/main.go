@@ -153,6 +153,8 @@ func SendEndHall(conn *websocket.Conn) {
 		return
 	}
 
+	g_isInHall = true
+
 	gLog.Info("send end hall uid %+v", g_Uid)
 	enterRoomReq := &pb.ClientLoginHallRequest{}
 	bytes, _ := proto.Marshal(enterRoomReq)
