@@ -1,19 +1,20 @@
-package game_mgr
+package handler
 
 import (
 	"encoding/json"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
+	"game_mgr/src/internal"
 	"io"
 	"net/http"
 )
 
-func (self *HttpService) GmCodeHandler(body []byte, w http.ResponseWriter) {
-
+func GmCodeHandler(body []byte, w http.ResponseWriter) {
+	log := internal.GLog
 	var request domain.GmCode
 	err := json.Unmarshal(body, &request)
 	if err != nil {
-		self.Log.Info(" gmCode err %v ", err)
+		log.Info(" gmCode err %v ", err)
 		httpRes := domain.Response{Code: constants.INVALID_BODY, Msg: "invalid request body", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
@@ -39,6 +40,9 @@ func (self *HttpService) GmCodeHandler(body []byte, w http.ResponseWriter) {
 	//	io.WriteString(w, string(buf))
 	//	return
 	//}
+
+	//test only
+	internal.NatsPool.Publish(constants.GetGmCodeSubject(request.GameId), "test")
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

@@ -1,7 +1,8 @@
 package game_mgr
 
 import (
-	"game_mgr/src/log"
+	"game_mgr/src/domain"
+	"game_mgr/src/internal"
 	"github.com/go-ini/ini"
 )
 
@@ -9,40 +10,18 @@ type GlobalConfig struct {
 	Port        int
 	Level       string
 	LocalModel  bool
-	RedisConfig *RedisConfig
-	MongoConfig *MongoConfig
-	NatsConfig  *NatsConfig
-	NacosConfig *NacosConfig
-}
-
-type RedisConfig struct {
-	Address    string
-	MasterName string
-	Password   string
-}
-
-type MongoConfig struct {
-	Address string
-	Name    string
-}
-
-type NatsConfig struct {
-	Address string
-}
-
-type NacosConfig struct {
-	Ip         string
-	Port       uint64
-	SpaceId    string
-	GameGroup  string
-	GameDataId string
+	RedisConfig *domain.RedisConfig
+	MongoConfig *domain.MongoConfig
+	NatsConfig  *domain.NatsConfig
+	NacosConfig *domain.NacosConfig
 }
 
 const (
 	CFG_NAME = "/Users/wuchuangeng/game/game_mgr/conf/game.ini"
 )
 
-func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
+func NewGlobalConfig() (*GlobalConfig, error) {
+	log := internal.GLog
 	ret := &GlobalConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
@@ -77,7 +56,7 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 	}
 	ret.LocalModel = key.MustBool(false)
 
-	nacosConfig, err := LoadNacosConfig(log)
+	nacosConfig, err := LoadNacosConfig()
 	if err != nil {
 		log.Error("get section nacos   err ")
 		return nil, err
@@ -85,11 +64,11 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 
 	ret.NacosConfig = nacosConfig
 
-	mongoConfig, err := LoadMongoConfig(log)
+	mongoConfig, err := LoadMongoConfig()
 
 	ret.MongoConfig = mongoConfig
 
-	redisConfig, err := LoadRedisConfig(log)
+	redisConfig, err := LoadRedisConfig()
 	if err != nil {
 		log.Error("get section redis   err ")
 		return nil, err
@@ -97,7 +76,7 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 
 	ret.RedisConfig = redisConfig
 
-	ret.NatsConfig, err = LoadNatsConfig(log)
+	ret.NatsConfig, err = LoadNatsConfig()
 	if err != nil {
 		log.Error("get nats section key  err ")
 		return nil, err
@@ -106,8 +85,9 @@ func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
 	return ret, nil
 }
 
-func LoadNatsConfig(log *log.Logger) (*NatsConfig, error) {
-	ret := &NatsConfig{}
+func LoadNatsConfig() (*domain.NatsConfig, error) {
+	log := internal.GLog
+	ret := &domain.NatsConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
@@ -129,8 +109,9 @@ func LoadNatsConfig(log *log.Logger) (*NatsConfig, error) {
 	return ret, nil
 }
 
-func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
-	ret := &NacosConfig{}
+func LoadNacosConfig() (*domain.NacosConfig, error) {
+	log := internal.GLog
+	ret := &domain.NacosConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
@@ -181,8 +162,9 @@ func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
 	return ret, nil
 }
 
-func LoadMongoConfig(log *log.Logger) (*MongoConfig, error) {
-	ret := &MongoConfig{}
+func LoadMongoConfig() (*domain.MongoConfig, error) {
+	log := internal.GLog
+	ret := &domain.MongoConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")
@@ -212,8 +194,9 @@ func LoadMongoConfig(log *log.Logger) (*MongoConfig, error) {
 	return ret, nil
 }
 
-func LoadRedisConfig(log *log.Logger) (*RedisConfig, error) {
-	ret := &RedisConfig{}
+func LoadRedisConfig() (*domain.RedisConfig, error) {
+	log := internal.GLog
+	ret := &domain.RedisConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
 		log.Error("load file game.ini err ")

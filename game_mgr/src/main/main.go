@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"game_mgr/src"
+	"game_mgr/src/internal"
 	log2 "game_mgr/src/log"
 	"log"
 	"os"
@@ -10,19 +10,19 @@ import (
 )
 
 func main() {
-	pwd, err := os.Getwd()
-	fmt.Println("Current working directory:", pwd)
 	logName := "/Users/wuchuangeng/game/logs/" + "game_mgr.log"
 	//日志名 + 文件大小（M为单位） + 打印标志 + 线程数量 （未启动） + 工作协程长度（未启动） + 深度
-	initLog := log2.NewLogger2(logName, 1024*2, log.LstdFlags|log.Lshortfile, 8, 1024, 2)
-	config, err := game_mgr.NewGlobalConfig(initLog)
+	internal.GLog = log2.NewLogger2(logName, 1024*2, log.LstdFlags|log.Lshortfile, 8, 1024, 2)
+	initLog := internal.GLog
+	globalConfig, err := game_mgr.NewGlobalConfig()
 	if err != nil {
 		initLog.Info("LoadConfig err ")
 		panic(err)
 		return
 	}
-	initLog.Info("config %+v", config)
-	server, err := game_mgr.NewHttpService(config, initLog)
+
+	initLog.Info("config %+v", globalConfig)
+	server, err := game_mgr.NewHttpService(globalConfig)
 	if err != nil {
 		initLog.Error("new server err, %+v", err)
 		return

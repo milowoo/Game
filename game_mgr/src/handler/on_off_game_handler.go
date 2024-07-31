@@ -1,20 +1,22 @@
-package game_mgr
+package handler
 
 import (
 	"encoding/json"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
+	"game_mgr/src/internal"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	"io"
 	"net/http"
 	"time"
 )
 
-func (self *HttpService) OnOffGameHandler(body []byte, w http.ResponseWriter) {
+func OnOffGameHandler(config *domain.NacosConfig, body []byte, w http.ResponseWriter) {
+	log := internal.GLog
 	var request domain.GameInfo
 	err := json.Unmarshal(body, &request)
 	if err != nil {
-		self.Log.Info(" onOffGame err %v ", err)
+		log.Info(" onOffGame err %v ", err)
 		httpRes := domain.Response{Code: constants.INVALID_BODY, Msg: "invalid request body", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
@@ -22,16 +24,16 @@ func (self *HttpService) OnOffGameHandler(body []byte, w http.ResponseWriter) {
 	}
 
 	if request.Status != 1 && request.Status != 2 {
-		self.Log.Info(" onOffGame err %v ", err)
+		log.Info(" onOffGame err %v ", err)
 		httpRes := domain.Response{Code: constants.INVALID_STATUS, Msg: "invalid request status", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
 		return
 	}
 
-	dbData := self.Mongo.GetGame(request.GameId)
+	dbData := internal.Mongo.GetGame(request.GameId)
 	if dbData == nil {
-		self.Log.Info(" onOffGame err no exist gameId %+v err %+v ", request.GameId, err)
+		log.Info(" onOffGame err no exist gameId %+v err %+v ", request.GameId, err)
 		httpRes := domain.Response{Code: constants.INVALID_STATUS, Msg: "game no exist", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
@@ -45,17 +47,17 @@ func (self *HttpService) OnOffGameHandler(body []byte, w http.ResponseWriter) {
 	}
 
 	redisBuf, _ := json.Marshal(dbData)
-	self.RedisDao.Set(request.GameId, redisBuf, 0)
+	internal.RedisDao.Set(request.GameId, redisBuf, 0)
 
-	self.Mongo.SavaGame(request.GameId, dbData)
+	internal.Mongo.SavaGame(request.GameId, dbData)
 	//通告 gameId 变化
-	publicResult, err := self.IClient.PublishConfig(vo.ConfigParam{
-		DataId:  self.GameConfig.NacosConfig.GameDataId,
-		Group:   self.GameConfig.NacosConfig.GameGroup,
+	publicResult, err := internal.IClient.PublishConfig(vo.ConfigParam{
+		DataId:  config.GameDataId,
+		Group:   config.GameGroup,
 		Content: request.GameId,
 	})
 
-	self.Log.Info("on off game public result %v err %+v", publicResult, err)
+	log.Info("on off game public result %v err %+v", publicResult, err)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

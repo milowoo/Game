@@ -1,29 +1,30 @@
-package game_mgr
+package handler
 
 import (
 	"encoding/json"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
+	"game_mgr/src/internal"
 	"io"
 	"net/http"
 )
 
-func (self *HttpService) AddAiHandler(body []byte, w http.ResponseWriter) {
-	var request domain.AiInfo
+func KickColoredUidHandler(body []byte, w http.ResponseWriter) {
+	log := internal.GLog
+	var request domain.ColoredUidRequest
 	err := json.Unmarshal(body, &request)
 	if err != nil {
-		self.Log.Info(" AddAiHandler err %v ", err)
+		log.Info(" AddColoredUidHandler err %v ", err)
 		httpRes := domain.Response{Code: constants.INVALID_BODY, Msg: "invalid request body", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
 		return
 	}
+	log.Info("kickColoredUidHandler request %+v", request)
 
-	aiSetKey := "AI_UID_PID_SET_KEY"
-	aiHKey := "AI_UID_PID_H_KEY"
+	setKey := "COLORED_UID_SET_KEY" + request.GameId
 
-	self.RedisDao.SAdd(aiSetKey, request.Uid)
-	self.RedisDao.HSet(aiHKey, request.Uid, request.Pid)
+	internal.RedisDao.SREM(setKey, request.UidList)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

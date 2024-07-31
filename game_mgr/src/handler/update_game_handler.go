@@ -1,19 +1,21 @@
-package game_mgr
+package handler
 
 import (
 	"encoding/json"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
+	"game_mgr/src/internal"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	"io"
 	"net/http"
 )
 
-func (self *HttpService) UpdateGameHandler(body []byte, w http.ResponseWriter) {
+func UpdateGameHandler(config *domain.NacosConfig, body []byte, w http.ResponseWriter) {
+	log := internal.GLog
 	var request domain.GameInfo
 	err := json.Unmarshal(body, &request)
 	if err != nil {
-		self.Log.Info(" addGame err %v ", err)
+		log.Info(" addGame err %v ", err)
 		httpRes := domain.Response{Code: constants.INVALID_BODY, Msg: "invalid request body", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
@@ -21,9 +23,9 @@ func (self *HttpService) UpdateGameHandler(body []byte, w http.ResponseWriter) {
 	}
 
 	//获取 game 信息
-	dbData := self.Mongo.GetGame(request.GameId)
+	dbData := internal.Mongo.GetGame(request.GameId)
 	if dbData == nil {
-		self.Log.Info(" addGame err no exist gameId %+v err %+v ", request.GameId, err)
+		log.Info(" addGame err no exist gameId %+v err %+v ", request.GameId, err)
 		httpRes := domain.Response{Code: constants.GAME_NOT_EXIST, Msg: "game no exist", Data: ""}
 		buf, _ := json.Marshal(httpRes)
 		io.WriteString(w, string(buf))
@@ -51,20 +53,20 @@ func (self *HttpService) UpdateGameHandler(body []byte, w http.ResponseWriter) {
 
 	//记录 redis
 	redisBuf, _ := json.Marshal(dbData)
-	self.RedisDao.Set(request.GameId, redisBuf, 0)
+	internal.RedisDao.Set(request.GameId, redisBuf, 0)
 
-	self.Mongo.SavaGame(request.GameId, dbData)
+	internal.Mongo.SavaGame(request.GameId, dbData)
 
 	//通告 gameId 变化
-	publicResult, err := self.IClient.PublishConfig(vo.ConfigParam{
-		DataId:  self.GameConfig.NacosConfig.GameDataId,
-		Group:   self.GameConfig.NacosConfig.GameGroup,
+	publicResult, err := internal.IClient.PublishConfig(vo.ConfigParam{
+		DataId:  config.GameDataId,
+		Group:   config.GameGroup,
 		Content: request.GameId,
 	})
 
-	self.Log.Info("update public DataId %+v group %+v result %v err %+v",
-		self.GameConfig.NacosConfig.GameDataId,
-		self.GameConfig.NacosConfig.GameGroup,
+	log.Info("update public DataId %+v group %+v result %v err %+v",
+		config.GameDataId,
+		config.GameGroup,
 		publicResult, err)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}

@@ -26,7 +26,6 @@ func (dao *MongoDAO) GetGame(gameId string) *domain.GameInfo {
 	var m domain.GameInfo
 	err := c.FindOne(context.Background(), bson.M{"gameid": gameId}).Decode(&m)
 	if err != nil {
-		dao.log.Info("GetGame err %+v gameId %+v ", err, gameId)
 		return nil
 	}
 	return &m
