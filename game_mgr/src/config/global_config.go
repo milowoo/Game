@@ -1,4 +1,4 @@
-package game_mgr
+package config
 
 import (
 	"game_mgr/src/domain"

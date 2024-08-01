@@ -3,6 +3,7 @@ package game_mgr
 import (
 	"encoding/json"
 	"fmt"
+	"game_mgr/src/config"
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"game_mgr/src/handler"
@@ -22,14 +23,14 @@ import (
 
 // http 服务主要处理匹配回调
 type HttpService struct {
-	GameConfig *GlobalConfig
+	GameConfig *config.GlobalConfig
 	httpSvr    *http.Server
 	hostIp     string
 	pid        string
 	StopChan   chan bool
 }
 
-func NewHttpService(globalConfig *GlobalConfig) (*HttpService, error) {
+func NewHttpService(globalConfig *config.GlobalConfig) (*HttpService, error) {
 	log := internal.GLog
 	if globalConfig.Port == 0 {
 		return nil, nil
@@ -76,7 +77,7 @@ func NewHttpService(globalConfig *GlobalConfig) (*HttpService, error) {
 	return httpService, nil
 }
 
-func (server *HttpService) InitNacos(globalConfig *GlobalConfig) (config_client.IConfigClient, error) {
+func (server *HttpService) InitNacos(globalConfig *config.GlobalConfig) (config_client.IConfigClient, error) {
 	log := internal.GLog
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(globalConfig.NacosConfig.Ip, globalConfig.NacosConfig.Port, constant.WithContextPath("/nacos")),
