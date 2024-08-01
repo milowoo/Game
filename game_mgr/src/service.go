@@ -31,7 +31,6 @@ type HttpService struct {
 }
 
 func NewHttpService(globalConfig *config.GlobalConfig) (*HttpService, error) {
-	log := internal.GLog
 	if globalConfig.Port == 0 {
 		return nil, nil
 	}
@@ -46,17 +45,17 @@ func NewHttpService(globalConfig *config.GlobalConfig) (*HttpService, error) {
 
 	internal.RedisDao = redis.NewRedis(globalConfig.RedisConfig.Address, globalConfig.RedisConfig.MasterName, globalConfig.RedisConfig.Password)
 
-	client := mongo.Connect(globalConfig.MongoConfig.Address, globalConfig.MongoConfig.Name, log)
+	client := mongo.Connect(globalConfig.MongoConfig.Address, globalConfig.MongoConfig.Name, internal.GLog)
 	if client == nil {
-		log.Error("NewDataSource err  ")
+		internal.GLog.Error("NewDataSource err  ")
 		return nil, nil
 	}
 
-	internal.Mongo = mongo.NewMongoDao(client, log)
+	internal.Mongo = mongo.NewMongoDao(client, internal.GLog)
 
 	natsPool, err := mq.NatsInit(globalConfig.NatsConfig.Address)
 	if err != nil {
-		log.Error("nats 连接失败 %+v", err)
+		internal.GLog.Error("nats 连接失败 %+v", err)
 		return nil, err
 	}
 
@@ -64,7 +63,7 @@ func NewHttpService(globalConfig *config.GlobalConfig) (*HttpService, error) {
 
 	internal.IClient, err = httpService.InitNacos(globalConfig)
 	if err != nil {
-		log.Error("nats连接失败", err)
+		internal.GLog.Error("nats连接失败", err)
 		return nil, err
 	}
 
@@ -73,12 +72,11 @@ func NewHttpService(globalConfig *config.GlobalConfig) (*HttpService, error) {
 		hostIP = os.Getenv("K8S_HOST_IP")
 	}
 	httpService.hostIp = fmt.Sprintf("%+v:%+v", hostIP, globalConfig.Port)
-	log.Info("hostIp %+v Port %+v", hostIP, globalConfig.Port)
+	internal.GLog.Info("hostIp %+v Port %+v", hostIP, globalConfig.Port)
 	return httpService, nil
 }
 
 func (server *HttpService) InitNacos(globalConfig *config.GlobalConfig) (config_client.IConfigClient, error) {
-	log := internal.GLog
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(globalConfig.NacosConfig.Ip, globalConfig.NacosConfig.Port, constant.WithContextPath("/nacos")),
 	}
@@ -102,7 +100,7 @@ func (server *HttpService) InitNacos(globalConfig *config.GlobalConfig) (config_
 	)
 
 	if err != nil {
-		log.Error("nacos 连接失败 %+v", err)
+		internal.GLog.Error("nacos 连接失败 %+v", err)
 		panic(err)
 		return nil, err
 	}
@@ -123,12 +121,11 @@ func (self *HttpService) Run() {
 }
 
 func (self *HttpService) listenHttpServer() {
-	log := internal.GLog
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := ioutil.ReadAll(r.Body)
 		r.Body.Close()
 
-		log.Info(" uri %+v receive %+v ", r.RequestURI, string(body))
+		internal.GLog.Info(" uri %+v receive %+v ", r.RequestURI, string(body))
 		switch r.RequestURI {
 		case "/addGame":
 			//新增游戏
@@ -164,14 +161,14 @@ func (self *HttpService) listenHttpServer() {
 		}
 	})
 
-	log.Info(fmt.Sprintf("hostIP %v ", self.hostIp))
+	internal.GLog.Info(fmt.Sprintf("hostIP %v ", self.hostIp))
 
 	self.httpSvr = &http.Server{Addr: self.hostIp, Handler: handler}
 	go func() {
-		log.Info("  listen on %s", self.hostIp)
+		internal.GLog.Info("  listen on %s", self.hostIp)
 		err := self.httpSvr.ListenAndServe()
 		if err != nil {
-			log.Error("error, listenHttpServer %p", err)
+			internal.GLog.Error("error, listenHttpServer %p", err)
 		}
 	}()
 }

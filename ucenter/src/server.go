@@ -24,10 +24,9 @@ type Server struct {
 }
 
 func NewServer() (*Server, error) {
-	log := internal.GLog
 	config, err := config.NewGlobalConfig()
 	if err != nil {
-		log.Error("NewServer log config err")
+		internal.GLog.Error("NewServer log config err")
 		return nil, err
 	}
 
@@ -35,23 +34,23 @@ func NewServer() (*Server, error) {
 		WaitGroup: &sync.WaitGroup{},
 	}
 
-	client := mongo.Connect(config.MongoConfig.Address, config.MongoConfig.Name, log)
+	client := mongo.Connect(config.MongoConfig.Address, config.MongoConfig.Name, internal.GLog)
 	if client == nil {
-		log.Error("NewDataSource err  ")
+		internal.GLog.Error("NewDataSource err  ")
 		return nil, nil
 	}
 
-	internal.Mongo = mongo.NewMongoDao(client, log)
+	internal.Mongo = mongo.NewMongoDao(client, internal.GLog)
 
 	internal.RedisDao = redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 
 	pool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
-		log.Error("NewServer nat init err")
+		internal.GLog.Error("NewServer nat init err")
 		return nil, err
 	}
 
-	log.Info("nats address %+v success ", config.NatsConfig.Address)
+	internal.GLog.Info("nats address %+v success ", config.NatsConfig.Address)
 
 	internal.NatsPool = pool
 
@@ -96,21 +95,20 @@ func (self *Server) Run() {
 }
 
 func (self *Server) SubscribeGetUid() {
-	log := internal.GLog
-	log.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
+	internal.GLog.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
 
 	// 订阅一个Nats Request 主题
 	err := internal.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
-		log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		internal.GLog.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 		req, _ := utils.ConvertInterfaceToString(msg)
 		var request pb.ApplyUidRequest
 		proto.Unmarshal([]byte(req), &request)
-		log.Info("SubscribeGetUid request pid %+v ", request.GetPid())
+		internal.GLog.Info("SubscribeGetUid request pid %+v ", request.GetPid())
 
 		handler.GetPlayerUID(reply, &request)
 	})
 
 	if err != nil {
-		log.Error("SubscribeGetUid err %+v", err)
+		internal.GLog.Error("SubscribeGetUid err %+v", err)
 	}
 }
