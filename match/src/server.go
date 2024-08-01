@@ -6,7 +6,8 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"match/src/log"
+	"match/src/config"
+	"match/src/internal"
 	"match/src/mq"
 	"match/src/redis"
 	"os"
@@ -18,25 +19,20 @@ import (
 var g_Server *Server
 
 type Server struct {
-	Log           *log.Logger
 	DynamicConfig *DynamicConfig
 	SubscribeGame *SubscribeGame
 	NatsService   *NatsService
 	MatchMgr      map[string]*GameMatch
-	Config        *GlobalConfig
+	Config        *config.GlobalConfig
 	WaitGroup     *sync.WaitGroup
-	NatsPool      *mq.NatsPool
-	ConfigClient  config_client.IConfigClient
-	NameClient    naming_client.INamingClient
-	RedisDao      *redis.RedisDao
 
 	isQuit bool
 }
 
-func NewServer(log *log.Logger) (*Server, error) {
-	config, err := NewGlobalConfig(log)
+func NewServer() (*Server, error) {
+	config, err := config.NewGlobalConfig()
 	if err != nil {
-		log.Error("NewServer log config err")
+		internal.GLog.Error("NewServer log config err")
 		return nil, err
 	}
 
@@ -44,21 +40,20 @@ func NewServer(log *log.Logger) (*Server, error) {
 		Config:    config,
 		WaitGroup: &sync.WaitGroup{},
 		MatchMgr:  make(map[string]*GameMatch),
-		Log:       log,
 	}
 
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
-	g_Server.RedisDao = redisDao
+	internal.RedisDao = redisDao
 
-	g_Server.NatsPool, err = mq.NatsInit(config.NatsConfig.Address)
+	internal.NatsPool, err = mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
-		log.Error("NewServer nat init err")
+		internal.GLog.Error("NewServer nat init err")
 		return nil, err
 	}
 
-	g_Server.ConfigClient, g_Server.NameClient, err = g_Server.InitNacos(config)
+	internal.ConfigClient, internal.NameClient, err = g_Server.InitNacos(config)
 	if err != nil {
-		log.Error("nacos 连接失败", err)
+		internal.GLog.Error("nacos 连接失败", err)
 		return nil, err
 	}
 
@@ -74,7 +69,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 	return g_Server, nil
 }
 
-func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, naming_client.INamingClient, error) {
+func (server *Server) InitNacos(config *config.GlobalConfig) (config_client.IConfigClient, naming_client.INamingClient, error) {
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(config.NacosConfig.Ip, config.NacosConfig.Port, constant.WithContextPath("/nacos")),
 	}
@@ -98,7 +93,7 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 	)
 
 	if err != nil {
-		log.Error("nacos config 连接失败 %+v", err)
+		internal.GLog.Error("nacos config 连接失败 %+v", err)
 		panic(err)
 		return nil, nil, err
 	}
@@ -112,7 +107,7 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 	)
 
 	if err != nil {
-		log.Error("nacos name  连接失败 %+v", err)
+		internal.GLog.Error("nacos name  连接失败 %+v", err)
 		panic(err)
 		return nil, nil, err
 	}
@@ -136,6 +131,7 @@ func (self *Server) Quit() {
 	self.SubscribeGame.Quit()
 
 	self.isQuit = true
+	internal.GLog.Info("match server is quit")
 
 	self.WaitGroup.Done()
 }
@@ -146,11 +142,11 @@ func (self *Server) Join() {
 
 func (self *Server) Run() {
 	if self.Config == nil {
-		self.Log.Error("Config is nil ...")
+		internal.GLog.Error("Config is nil ...")
 		self.Quit()
 	}
 
-	self.Log.Info("match server run begin ....")
+	internal.GLog.Info("match server run begin ....")
 
 	go self.DynamicConfig.Run()
 
@@ -163,7 +159,7 @@ func (self *Server) Run() {
 
 	gameMap := self.DynamicConfig.GetAllGame()
 	for _, game := range gameMap {
-		self.Log.Info("match run gameId %+v", game.GameId)
+		internal.GLog.Info("match run gameId %+v", game.GameId)
 		gameMatch := NewGameMatch(self, game)
 		go gameMatch.Run()
 		self.MatchMgr[game.GameId] = gameMatch
@@ -174,7 +170,7 @@ func (self *Server) Run() {
 	signal.Notify(c, os.Interrupt, os.Kill)
 	go func() {
 		<-c
-		self.Log.Warn("exit svr by signal ...")
+		internal.GLog.Warn("exit svr by signal ...")
 		self.Quit()
 	}()
 

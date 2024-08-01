@@ -1,4 +1,4 @@
-package ucenter
+package utils
 
 import (
 	"fmt"

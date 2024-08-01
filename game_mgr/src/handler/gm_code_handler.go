@@ -5,8 +5,11 @@ import (
 	"game_mgr/src/constants"
 	"game_mgr/src/domain"
 	"game_mgr/src/internal"
+	"game_mgr/src/pb"
+	"github.com/golang/protobuf/proto"
 	"io"
 	"net/http"
+	"time"
 )
 
 func GmCodeHandler(body []byte, w http.ResponseWriter) {
@@ -42,7 +45,13 @@ func GmCodeHandler(body []byte, w http.ResponseWriter) {
 	//}
 
 	//test only
-	internal.NatsPool.Publish(constants.GetGmCodeSubject(request.GameId), "test")
+	appRequest := &pb.ApplyUidRequest{
+		Pid: "23232323",
+	}
+	bytes, err := proto.Marshal(appRequest)
+	var reply interface{}
+	internal.NatsPool.Request(constants.UCENTER_APPLY_UID_SUBJECT, string(bytes), &reply, 3*time.Second)
+	log.Info("reply is %+v", reply)
 
 	httpRes := domain.Response{Code: constants.CODE_SUCCESS, Msg: "success", Data: ""}
 	buf, _ := json.Marshal(httpRes)

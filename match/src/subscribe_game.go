@@ -5,18 +5,17 @@ package match
 */
 
 import (
-	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"match/src/log"
+	"match/src/domain"
+	"match/src/internal"
+	"match/src/utils"
 )
 
 type SubscribeGame struct {
 	Server          *Server
-	NacosConfig     *NacosConfig
-	log             *log.Logger
+	NacosConfig     *domain.NacosConfig
 	SubGameMap      map[string]*vo.SubscribeParam
-	Client          naming_client.INamingClient
 	gameChange      chan string
 	subGameInstance chan string
 	exit            chan bool
@@ -27,8 +26,6 @@ func NewSubscribeGame(server *Server) *SubscribeGame {
 	game := &SubscribeGame{
 		Server:          server,
 		NacosConfig:     server.Config.NacosConfig,
-		log:             server.Log,
-		Client:          server.NameClient,
 		SubGameMap:      make(map[string]*vo.SubscribeParam),
 		gameChange:      make(chan string, 100),
 		subGameInstance: make(chan string, 100),
@@ -43,7 +40,7 @@ func (self *SubscribeGame) Run() {
 	defer func() {
 		p := recover()
 		if p != nil {
-			self.log.Info("execute panic recovered and going to stop: %v", p)
+			internal.GLog.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
 
@@ -95,20 +92,20 @@ func (self *SubscribeGame) SubscribeGame(gameId string) {
 		ServiceName: gameId,
 		GroupName:   self.NacosConfig.GameGroup,
 		SubscribeCallback: func(services []model.Instance, err error) {
-			service := ToJsonString(services)
-			self.log.Info("callback return services %+v", service)
+			service := utils.ToJsonString(services)
+			internal.GLog.Info("callback return services %+v", service)
 			self.gameChange <- service
 		},
 	}
 
-	self.Client.Subscribe(subscribeParam)
+	internal.NameClient.Subscribe(subscribeParam)
 	self.SubGameMap[gameId] = subscribeParam
 }
 
 func (self *SubscribeGame) procGameDown(data string) {
-	services, err := JsonToServices(data)
+	services, err := utils.JsonToServices(data)
 	if err != nil {
-		self.log.Error("failed to unmarshal json string:%+v err:%+v", data, err)
+		internal.GLog.Error("failed to unmarshal json string:%+v err:%+v", data, err)
 	}
 
 	for _, service := range *services {
@@ -119,11 +116,11 @@ func (self *SubscribeGame) procGameDown(data string) {
 
 func (self *SubscribeGame) procGameHall(service model.Service) {
 	//取出所有的 down 处理的所有房间， 重新分配
-	self.log.Info("procGameRoom service %+v", service)
+	internal.GLog.Info("procGameRoom service %+v", service)
 	for _, instance := range service.Hosts {
-		self.log.Info("procGameRoom host %+v", instance)
+		internal.GLog.Info("procGameRoom host %+v", instance)
 		if !instance.Enable {
-			self.log.Error("warn service %+v", instance)
+			internal.GLog.Error("warn service %+v", instance)
 		}
 	}
 }
@@ -133,8 +130,8 @@ func (self *SubscribeGame) Quit() {
 		return
 	}
 	for _, param := range self.SubGameMap {
-		self.Client.Unsubscribe(param)
+		internal.NameClient.Unsubscribe(param)
 	}
-
+	internal.GLog.Info("subsrcibe game quit")
 	self.exit <- true
 }

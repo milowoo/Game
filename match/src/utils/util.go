@@ -1,4 +1,4 @@
-package match
+package utils
 
 import (
 	"encoding/json"
@@ -47,12 +47,6 @@ func SafeRunClosure(v interface{}, c Closure) {
 	}()
 
 	c()
-}
-
-func RunOnMatch(c chan Closure, mgr *GameMatch, cb func(mgr *GameMatch)) {
-	c <- func() {
-		cb(mgr)
-	}
 }
 
 func RandomInt(rand *rand.Rand, min int64, maxPlus1 int64) int64 {

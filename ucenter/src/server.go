@@ -1,39 +1,38 @@
 package ucenter
 
 import (
+	"github.com/golang/protobuf/proto"
 	"os"
 	"os/signal"
 	"sync"
-	"ucenter/src/log"
+	"ucenter/src/config"
+	"ucenter/src/constants"
+	"ucenter/src/handler"
+	"ucenter/src/internal"
 	"ucenter/src/mongo"
 	"ucenter/src/mq"
+	"ucenter/src/pb"
 	"ucenter/src/redis"
+	"ucenter/src/utils"
 )
 
 var g_Server *Server
 
 type Server struct {
-	Log       *log.Logger
-	Config    *GlobalConfig
 	WaitGroup *sync.WaitGroup
-	NatsPool  *mq.NatsPool
-	RedisDao  *redis.RedisDao
-	MongoDao  *mongo.MongoDAO
-	Handler   *HandlerMgr
 	isQuit    bool
 }
 
-func NewServer(log *log.Logger) (*Server, error) {
-	config, err := NewGlobalConfig(log)
+func NewServer() (*Server, error) {
+	log := internal.GLog
+	config, err := config.NewGlobalConfig()
 	if err != nil {
 		log.Error("NewServer log config err")
 		return nil, err
 	}
 
 	g_Server = &Server{
-		Config:    config,
 		WaitGroup: &sync.WaitGroup{},
-		Log:       log,
 	}
 
 	client := mongo.Connect(config.MongoConfig.Address, config.MongoConfig.Name, log)
@@ -42,10 +41,9 @@ func NewServer(log *log.Logger) (*Server, error) {
 		return nil, nil
 	}
 
-	g_Server.MongoDao = mongo.NewMongoDao(client, log)
+	internal.Mongo = mongo.NewMongoDao(client, log)
 
-	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
-	g_Server.RedisDao = redisDao
+	internal.RedisDao = redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 
 	pool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
@@ -55,10 +53,7 @@ func NewServer(log *log.Logger) (*Server, error) {
 
 	log.Info("nats address %+v success ", config.NatsConfig.Address)
 
-	g_Server.NatsPool = pool
-
-	handlerMgr := NewHandler(g_Server)
-	g_Server.Handler = handlerMgr
+	internal.NatsPool = pool
 
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
 
@@ -71,9 +66,8 @@ func (self *Server) Quit() {
 		return
 	}
 
-	self.Log.Info("server is quit")
+	internal.GLog.Info("server is quit")
 	self.isQuit = true
-	self.Handler.Quit()
 
 	self.WaitGroup.Done()
 }
@@ -83,23 +77,40 @@ func (self *Server) Join() {
 }
 
 func (self *Server) Run() {
-	if self.Config == nil {
-		self.Log.Error("Config is nil ...")
-		self.Quit()
-	}
+	log := internal.GLog
 
-	self.Log.Info("ucenter run begin ")
+	log.Info("ucenter run begin ")
 
-	go self.Handler.Run()
+	self.SubscribeGetUid()
 
 	// wait exit
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, os.Kill)
 	go func() {
 		<-c
-		self.Log.Warn("exit svr by signal ...")
+		log.Warn("exit svr by signal ...")
 		self.Quit()
 	}()
 
 	self.Join()
+}
+
+func (self *Server) SubscribeGetUid() {
+	log := internal.GLog
+	log.Info("SubscribeGetUid subject %+v begin ... ", constants.UCENTER_APPLY_UID_SUBJECT)
+
+	// 订阅一个Nats Request 主题
+	err := internal.NatsPool.SubscribeForRequest(constants.UCENTER_APPLY_UID_SUBJECT, func(subj, reply string, msg interface{}) {
+		log.Info("Nats Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		req, _ := utils.ConvertInterfaceToString(msg)
+		var request pb.ApplyUidRequest
+		proto.Unmarshal([]byte(req), &request)
+		log.Info("SubscribeGetUid request pid %+v ", request.GetPid())
+
+		handler.GetPlayerUID(reply, &request)
+	})
+
+	if err != nil {
+		log.Error("SubscribeGetUid err %+v", err)
+	}
 }

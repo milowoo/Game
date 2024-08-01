@@ -2,27 +2,24 @@ package match
 
 import (
 	"github.com/golang/protobuf/proto"
+	"match/src/config"
 	"match/src/constants"
-	"match/src/log"
-	"match/src/mq"
+	"match/src/internal"
 	"match/src/pb"
+	"match/src/utils"
 )
 
 type NatsService struct {
-	Server   *Server
-	log      *log.Logger
-	Config   *GlobalConfig
-	NatsPool *mq.NatsPool
-	exit     chan bool
+	Server *Server
+	Config *config.GlobalConfig
+	exit   chan bool
 }
 
 func NewNatsService(server *Server) *NatsService {
 	return &NatsService{
-		Server:   server,
-		log:      server.Log,
-		Config:   server.Config,
-		NatsPool: server.NatsPool,
-		exit:     make(chan bool, 1),
+		Server: server,
+		Config: server.Config,
+		exit:   make(chan bool, 1),
 	}
 }
 
@@ -30,7 +27,7 @@ func (self *NatsService) Run() {
 	defer func() {
 		p := recover()
 		if p != nil {
-			self.log.Info("execute panic recovered and going to stop: %v", p)
+			internal.GLog.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
 
@@ -60,60 +57,60 @@ func (self *NatsService) Run() {
 			// do nothing
 		}
 	}
-	self.log.Info("nats service exit")
+	internal.GLog.Info("nats service exit")
 }
 
 func (self *NatsService) subscribeLoginHallRequest() {
 	// 订阅Nats 进入大厅 主题
-	err := self.NatsPool.SubscribeForRequest(constants.LOGIN_HALL_SUBJECT, func(subj, reply string, msg interface{}) {
-		self.log.Info("subscribeLoginHallRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
-		req, _ := ConvertInterfaceToString(msg)
+	err := internal.NatsPool.SubscribeForRequest(constants.LOGIN_HALL_SUBJECT, func(subj, reply string, msg interface{}) {
+		internal.GLog.Info("subscribeLoginHallRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		req, _ := utils.ConvertInterfaceToString(msg)
 		var request pb.CreateHallRequest
 		proto.Unmarshal([]byte(req), &request)
 		gameMatch := self.Server.MatchMgr[request.GetGameId()]
-		self.log.Info("subscribeLoginHallRequest adasd")
+		internal.GLog.Info("subscribeLoginHallRequest adasd")
 		if gameMatch == nil {
-			self.log.Error("subscribeLoginHallRequest gameId %+v not found", request.GetGameId())
+			internal.GLog.Error("subscribeLoginHallRequest gameId %+v not found", request.GetGameId())
 			response := &pb.CreateHallResponse{
 				Code: constants.INVALID_GAME_ID,
 				Msg:  "invalid gameId",
 			}
 
 			res, _ := proto.Marshal(response)
-			self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+			internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 			return
 		}
 
-		self.log.Info("subscribeLoginHallRequest 11111")
+		internal.GLog.Info("subscribeLoginHallRequest 11111")
 
 		RunOnMatch(gameMatch.MsgFromNats, gameMatch, func(gameMatch *GameMatch) {
-			self.log.Info("subscribeLoginHallRequest 22222")
+			internal.GLog.Info("subscribeLoginHallRequest 22222")
 			gameMatch.LoginHallRequest(reply, &request)
 		})
 	})
 	if err != nil {
-		self.log.Error("subscribeLoginHallRequest err %+v", err)
+		internal.GLog.Error("subscribeLoginHallRequest err %+v", err)
 	}
 }
 
 func (self *NatsService) subscribeMatchRequest() {
 	// 订阅Nats 匹配 主题
-	err := self.NatsPool.SubscribeForRequest(constants.MATCH_SUBJECT, func(subj, reply string, msg interface{}) {
-		self.log.Info("subscribeMatchRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
-		req, err := ConvertInterfaceToString(msg)
+	err := internal.NatsPool.SubscribeForRequest(constants.MATCH_SUBJECT, func(subj, reply string, msg interface{}) {
+		internal.GLog.Info("subscribeMatchRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		req, err := utils.ConvertInterfaceToString(msg)
 		if err == nil {
 			var request pb.MatchRequest
 			proto.Unmarshal([]byte(req), &request)
 			gameMatch := self.Server.MatchMgr[request.GetGameId()]
 			if gameMatch == nil {
-				self.log.Error("subscribeMatchRequest gameId %+v not found", request.GetGameId())
+				internal.GLog.Error("subscribeMatchRequest gameId %+v not found", request.GetGameId())
 				response := &pb.MatchResponse{
 					Code: constants.INVALID_GAME_ID,
 					Msg:  "invalid gameId",
 				}
 
 				res, _ := proto.Marshal(response)
-				self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 				return
 			}
 
@@ -124,35 +121,35 @@ func (self *NatsService) subscribeMatchRequest() {
 				}
 
 				res, _ := proto.Marshal(response)
-				self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 			})
 		}
 	})
 
 	if err != nil {
-		self.log.Error("subscribeMatchRequest err %+v", err)
+		internal.GLog.Error("subscribeMatchRequest err %+v", err)
 	}
 
 }
 
 func (self *NatsService) subscribeCancelMatchRequest() {
 	// 订阅Nats 取消匹配 主题
-	err := self.NatsPool.SubscribeForRequest(constants.CANCEL_MATCH_SUBJECT, func(subj, reply string, msg interface{}) {
-		self.log.Info("subscribeCancelMatchRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
-		req, err := ConvertInterfaceToString(msg)
+	err := internal.NatsPool.SubscribeForRequest(constants.CANCEL_MATCH_SUBJECT, func(subj, reply string, msg interface{}) {
+		internal.GLog.Info("subscribeCancelMatchRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		req, err := utils.ConvertInterfaceToString(msg)
 		if err == nil {
 			var request pb.CancelMatchRequest
 			proto.Unmarshal([]byte(req), &request)
 			gameMatch := self.Server.MatchMgr[request.GetGameId()]
 			if gameMatch == nil {
-				self.log.Error("subscribeCancelMatchRequest gameId %+v not found", request.GetGameId())
+				internal.GLog.Error("subscribeCancelMatchRequest gameId %+v not found", request.GetGameId())
 				response := &pb.CancelMatchResponse{
 					Code: constants.INVALID_GAME_ID,
 					Msg:  "invalid gameId",
 				}
 
 				res, _ := proto.Marshal(response)
-				self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 				return
 			}
 
@@ -162,20 +159,20 @@ func (self *NatsService) subscribeCancelMatchRequest() {
 					Code: constants.CODE_SUCCESS,
 				}
 				res, _ := proto.Marshal(response)
-				self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 			})
 		} else {
-			self.log.Error("subscribeCancelMatchRequest Failed to convert interface{} to *nats.Msg")
+			internal.GLog.Error("subscribeCancelMatchRequest Failed to convert interface{} to *nats.Msg")
 		}
 
 	})
 
 	if err != nil {
-		self.log.Error("subscribeCancelMatchRequest err %+v", err)
+		internal.GLog.Error("subscribeCancelMatchRequest err %+v", err)
 	}
 }
 
 func (self *NatsService) Quit() {
-	self.log.Info("Quit NatsService ....")
+	internal.GLog.Info("Quit NatsService ....")
 	self.exit <- true
 }
