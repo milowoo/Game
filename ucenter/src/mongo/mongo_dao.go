@@ -26,7 +26,6 @@ func (dao *MongoDAO) GetPlayer(pid string) *domain.Player {
 	var m domain.Player
 	err := c.FindOne(context.Background(), bson.M{"pid": pid}).Decode(&m)
 	if err != nil {
-		dao.log.Debug("GetPlayer err %+v uid %+v ", err, pid)
 		return nil
 	}
 	return &m

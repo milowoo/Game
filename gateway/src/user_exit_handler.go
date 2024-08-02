@@ -1,13 +1,14 @@
 package gateway
 
 import (
+	"gateway/src/internal"
 	"gateway/src/pb"
 	"github.com/golang/protobuf/proto"
 )
 
 func UserExitHandler(agent *Agent, reason int32) {
 	if len(agent.GameSubject) < 1 {
-		agent.Log.Error("UserExitHandler invalid request ")
+		internal.GLog.Error("UserExitHandler invalid request ")
 		return
 	}
 

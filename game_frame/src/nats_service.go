@@ -2,16 +2,12 @@ package game_frame
 
 import (
 	"game_frame/src/constants"
-	"game_frame/src/log"
-	"game_frame/src/mq"
+	"game_frame/src/internal"
 	"github.com/nats-io/go-nats"
 )
 
 type NatsService struct {
 	Server                 *Server
-	log                    *log.Logger
-	Config                 *GlobalConfig
-	NatsPool               *mq.NatsPool
 	MsgFromRoomMgr         chan Closure
 	GameId                 string
 	matchCreateRoomSubject string
@@ -27,9 +23,6 @@ func NewNatsService(server *Server) *NatsService {
 	gameSubject := constants.GetGameSubject(server.Config.GameId, GetHostIp())
 	return &NatsService{
 		Server:                 server,
-		log:                    server.Log,
-		Config:                 server.Config,
-		NatsPool:               server.NatsPool,
 		GameId:                 server.Config.GameId,
 		MsgFromRoomMgr:         make(chan Closure, 2*1024),
 		gmData:                 make(chan []byte, 128),
@@ -44,7 +37,7 @@ func (self *NatsService) Run() {
 	defer func() {
 		p := recover()
 		if p != nil {
-			self.log.Info("execute panic recovered and going to stop: %v", p)
+			internal.GLog.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
 
@@ -83,28 +76,28 @@ func (self *NatsService) Run() {
 
 func (self *NatsService) subscribeMatch() {
 	// 订阅一个Nats Request 主题
-	self.log.Info("subscribeMatch subject %+v ", self.matchCreateRoomSubject)
-	err := self.NatsPool.SubscribeForRequest(self.matchCreateRoomSubject, func(subj, reply string, msg interface{}) {
-		self.log.Info("Nats subscribeMatch request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+	internal.GLog.Info("subscribeMatch subject %+v ", self.matchCreateRoomSubject)
+	err := internal.NatsPool.SubscribeForRequest(self.matchCreateRoomSubject, func(subj, reply string, msg interface{}) {
+		internal.GLog.Info("Nats subscribeMatch request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 
 		roomId := msg.(string)
 		hostIp := GetHostIp()
 
-		self.log.Info("subscribeMatch roomId %+v hostIp %+v", roomId, hostIp)
-		self.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": hostIp})
+		internal.GLog.Info("subscribeMatch roomId %+v hostIp %+v", roomId, hostIp)
+		internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": hostIp})
 	})
 
 	if err != nil {
-		self.log.Error("subscribeMatch err %+v", err)
+		internal.GLog.Error("subscribeMatch err %+v", err)
 	}
 
 }
 
 func (self *NatsService) subscribeGateway() {
 	// 订阅一个Nats Request 主题
-	self.log.Info("subscribeGateway subject %+v ", self.gameSubject)
-	err := self.NatsPool.SubscribeForRequest(self.gameSubject, func(subj, reply string, msg interface{}) {
-		self.log.Info("subscribeGateway request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+	internal.GLog.Info("subscribeGateway subject %+v ", self.gameSubject)
+	err := internal.NatsPool.SubscribeForRequest(self.gameSubject, func(subj, reply string, msg interface{}) {
+		internal.GLog.Info("subscribeGateway request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 
 		roomMgr := self.Server.RoomMgr
 		RunOnRoomMgr(roomMgr.MsgFromNats, roomMgr, func(roomMgr *RoomMgr) {
@@ -113,16 +106,16 @@ func (self *NatsService) subscribeGateway() {
 	})
 
 	if err != nil {
-		self.log.Error("subscribeGateway err %+v", err)
+		internal.GLog.Error("subscribeGateway err %+v", err)
 	}
 }
 
 func (self *NatsService) subscribeGM() {
-	err := self.NatsPool.Subscribe(self.gmSubject, func(msg *nats.Msg) {
+	err := internal.NatsPool.Subscribe(self.gmSubject, func(msg *nats.Msg) {
 		self.gmData <- msg.Data
 	})
 	if err != nil {
-		self.log.Error("subscribeMatch err %+v", err)
+		internal.GLog.Error("subscribeMatch err %+v", err)
 	}
 }
 
@@ -131,8 +124,8 @@ func (self *NatsService) processGmCode(data []byte) {
 }
 
 func (self *NatsService) Quit() {
-	self.log.Info("nats service quit ....")
-	self.NatsPool.Unsubscribe(self.matchCreateRoomSubject, self.gameSubject, self.gmSubject)
+	internal.GLog.Info("nats service quit ....")
+	internal.NatsPool.Unsubscribe(self.matchCreateRoomSubject, self.gameSubject, self.gmSubject)
 
 	self.exit <- true
 }

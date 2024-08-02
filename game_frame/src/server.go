@@ -1,7 +1,8 @@
 package game_frame
 
 import (
-	"game_frame/src/log"
+	"game_frame/src/config"
+	"game_frame/src/internal"
 	"game_frame/src/mq"
 	"game_frame/src/redis"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
@@ -17,46 +18,41 @@ import (
 var g_Server *Server
 
 type Server struct {
-	Log           *log.Logger
-	Config        *GlobalConfig
+	Config        *config.GlobalConfig
 	DynamicConfig *DynamicConfig
 	NatsService   *NatsService
 	WaitGroup     *sync.WaitGroup
-	NatsPool      *mq.NatsPool
-	RedisDao      *redis.RedisDao
-	ConfigClient  config_client.IConfigClient
-	NameClient    naming_client.INamingClient
 	RoomMgr       *RoomMgr
+	HostIp        string
 	isQuit        bool
 }
 
-func NewServer(log *log.Logger) (*Server, error) {
-	config, err := NewGlobalConfig(log)
+func NewServer() (*Server, error) {
+	config, err := config.NewGlobalConfig()
 	if err != nil {
-		log.Error("NewServer log config err")
+		internal.GLog.Error("NewServer log config err")
 		return nil, err
 	}
 
 	g_Server = &Server{
 		Config:    config,
+		HostIp:    GetHostIp(),
 		WaitGroup: &sync.WaitGroup{},
-		Log:       log,
 	}
 
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
-	g_Server.RedisDao = redisDao
+	internal.RedisDao = redisDao
 
 	pool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
-		log.Error("NewServer nat init err")
+		internal.GLog.Error("NewServer nat init err")
 		return nil, err
 	}
 
-	g_Server.NatsPool = pool
-
-	g_Server.ConfigClient, g_Server.NameClient, err = g_Server.InitNacos(config)
+	internal.NatsPool = pool
+	internal.ConfigClient, internal.NameClient, err = g_Server.InitNacos(config)
 	if err != nil {
-		log.Error("nacos 连接失败", err)
+		internal.GLog.Error("nacos 连接失败", err)
 		return nil, err
 	}
 
@@ -65,6 +61,19 @@ func NewServer(log *log.Logger) (*Server, error) {
 	g_Server.NatsService = NewNatsService(g_Server)
 
 	g_Server.RoomMgr = NewRoomMgr(g_Server)
+
+	g_Server.registerServiceInstance(vo.RegisterInstanceParam{
+		Ip:          g_Server.HostIp,
+		Port:        config.Port,
+		ServiceName: config.GameId,
+		GroupName:   "group-a",
+		ClusterName: "cluster-a",
+		Weight:      10,
+		Enable:      true,
+		Healthy:     true,
+		Ephemeral:   true,
+		Metadata:    map[string]string{"idc": "shanghai"},
+	})
 
 	g_Server.WaitGroup.Add(1) // 对应Quit中的Done
 
@@ -78,9 +87,27 @@ func (self *Server) Quit() {
 	}
 
 	self.isQuit = true
-	self.NatsService.Quit()
-	self.RoomMgr.Quit()
-	self.DynamicConfig.Quit()
+
+	if self.NatsService != nil {
+		self.NatsService.Quit()
+	}
+
+	if self.RoomMgr != nil {
+		self.RoomMgr.Quit()
+	}
+
+	if self.DynamicConfig != nil {
+		self.DynamicConfig.Quit()
+	}
+
+	self.deRegisterServiceInstance(vo.DeregisterInstanceParam{
+		Ip:          self.HostIp,
+		Port:        self.Config.Port,
+		ServiceName: self.Config.GameId,
+		GroupName:   "group-a",
+		Cluster:     "cluster-a",
+		Ephemeral:   true, //it must be true
+	})
 
 	self.WaitGroup.Done()
 }
@@ -91,7 +118,7 @@ func (self *Server) Join() {
 
 func (self *Server) Run() {
 	if self.Config == nil {
-		self.Log.Error("Config is nil ...")
+		internal.GLog.Error("Config is nil ...")
 		self.Quit()
 	}
 
@@ -104,14 +131,14 @@ func (self *Server) Run() {
 	signal.Notify(c, os.Interrupt, os.Kill)
 	go func() {
 		<-c
-		self.Log.Warn("exit svr by signal ...")
+		internal.GLog.Warn("exit svr by signal ...")
 		self.Quit()
 	}()
 
 	self.Join()
 }
 
-func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, naming_client.INamingClient, error) {
+func (server *Server) InitNacos(config *config.GlobalConfig) (config_client.IConfigClient, naming_client.INamingClient, error) {
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(config.NacosConfig.Ip, config.NacosConfig.Port, constant.WithContextPath("/nacos")),
 	}
@@ -134,7 +161,7 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 		},
 	)
 	if err != nil {
-		log.Error("nacos 连接失败 %+v", err)
+		internal.GLog.Error("nacos 连接失败 %+v", err)
 		panic(err)
 		return nil, nil, err
 	}
@@ -148,7 +175,7 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 	)
 
 	if err != nil {
-		log.Error("nacos 连接失败 %+v", err)
+		internal.GLog.Error("nacos 连接失败 %+v", err)
 		panic(err)
 		return nil, nil, err
 	}
@@ -173,7 +200,29 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 		return nil, nil, err
 	}
 
-	log.Info("RegisterServiceInstance,param:%+v,result:%+v ", param, success)
+	internal.GLog.Info("RegisterServiceInstance,param:%+v,result:%+v ", param, success)
 
 	return configClient, client, nil
+}
+
+func (self *Server) registerServiceInstance(param vo.RegisterInstanceParam) error {
+	success, err := internal.NameClient.RegisterInstance(param)
+	if !success || err != nil {
+		internal.GLog.Error("RegisterServiceInstance,failed %+v \n\n", err)
+		panic("RegisterServiceInstance failed!" + err.Error())
+		return err
+	}
+	internal.GLog.Info("RegisterServiceInstance,param:%+v,result:%+v \n\n", param, success)
+	return nil
+}
+
+func (self *Server) deRegisterServiceInstance(param vo.DeregisterInstanceParam) error {
+	success, err := internal.NameClient.DeregisterInstance(param)
+	if !success || err != nil {
+		internal.GLog.Error("DeRegisterServiceInstance  %+v \n\n", err)
+		panic("DeRegisterServiceInstance failed!" + err.Error())
+		return err
+	}
+	internal.GLog.Info("DeRegisterServiceInstance,param:%+v,result:%+v \n\n", param, success)
+	return nil
 }

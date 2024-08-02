@@ -3,10 +3,9 @@ package game_frame
 import (
 	"fmt"
 	"game_frame/src/constants"
-	"game_frame/src/log"
-	"game_frame/src/mq"
+	"game_frame/src/domain"
+	"game_frame/src/internal"
 	"game_frame/src/pb"
-	"game_frame/src/redis"
 	"github.com/golang/protobuf/proto"
 	"math/rand"
 	"reflect"
@@ -52,15 +51,11 @@ func NewPlayer(roomId string, uid string, pid string, hostIp string, isAi bool) 
 }
 
 type Room struct {
-	GlobalConfig  *GlobalConfig
-	DynamicConfig *DynamicConfig
+	RoomMgr *RoomMgr
+	Counter *AtomicCounter
 
-	RedisDao *redis.RedisDao
-	RoomMgr  *RoomMgr
-	NatPool  *mq.NatsPool
-	Log      *log.Logger
-	Counter  *AtomicCounter
-
+	GameId         string
+	GameInfo       *domain.GameInfo
 	frameId        int
 	gameRunFrameId int //游戏运行的帧数
 	offLineFrameId int //掉线的帧数
@@ -100,12 +95,9 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 
 	now := time.Now()
 	self := &Room{
-		RoomMgr:       roomMgr,
-		Log:           roomMgr.Log,
-		NatPool:       roomMgr.Server.NatsPool,
-		RedisDao:      roomMgr.RedisDao,
-		GlobalConfig:  roomMgr.GlobalConfig,
-		DynamicConfig: roomMgr.DynamicConfig,
+		RoomMgr:  roomMgr,
+		GameId:   roomMgr.Server.Config.GameId,
+		GameInfo: roomMgr.Server.DynamicConfig.GameInfo,
 
 		frameId:            0,
 		gameRunFrameId:     0,
@@ -139,7 +131,7 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 	for p, v := range validRoomProtocols {
 		m := t.MethodByName(v)
 		if !m.IsValid() {
-			self.Log.Error("error, protocol handler not found, %s", p)
+			internal.GLog.Error("error, protocol handler not found, %s", p)
 		}
 		protocol2Method[p] = m
 	}
@@ -149,7 +141,7 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 }
 
 func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, data []byte) {
-	self.Log.Info("ApplyProtoHandler reply: %s", reply)
+	internal.GLog.Info("ApplyProtoHandler reply: %s", reply)
 	//method, ok := self.protocol2Method[head.ProtoName]
 	//if !ok {
 	//	self.Log.Info("method not found: %+v", head.ProtoName)
@@ -180,7 +172,7 @@ func (self *Room) Run() {
 	defer func() {
 		p := recover()
 		if p != nil {
-			self.Log.Info(fmt.Sprintf("execute panic recovered and going to stop: %v", p))
+			internal.GLog.Info(fmt.Sprintf("execute panic recovered and going to stop: %v", p))
 		}
 	}()
 
@@ -215,8 +207,9 @@ func (self *Room) Run() {
 }
 
 func (self *Room) Frame() {
-
+	self.exit <- true
 }
+
 func (self *Room) SaveAndQuit() {
 
 }
@@ -231,10 +224,10 @@ func (self *Room) ResponseGateway(reply string, head *pb.CommonHead, response pr
 		Data: string(bytes),
 	}
 
-	self.Log.Info("ResponseGateway reply: %+v protoName %+v", reply, head.GetPbName())
+	internal.GLog.Info("ResponseGateway reply: %+v protoName %+v", reply, head.GetPbName())
 
 	commBytes, _ := proto.Marshal(res)
-	self.RoomMgr.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(commBytes)})
+	internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(commBytes)})
 }
 
 // 房间内广播处理
@@ -255,7 +248,7 @@ func (self *Room) Send2PlayerMessage(player *GamePlayer, msg proto.Message) {
 
 	head := &pb.PushHead{
 		Uid:       player.Uid,
-		GameId:    self.GlobalConfig.GameId,
+		GameId:    self.GameId,
 		Pid:       player.Pid,
 		Timestamp: time.Now().Unix(),
 		RoomId:    self.RoomId,
@@ -268,7 +261,7 @@ func (self *Room) Send2PlayerMessage(player *GamePlayer, msg proto.Message) {
 		Data: string(bytes),
 	}
 	res, _ := proto.Marshal(data)
-	self.NatPool.Publish(constants.GetGamePushDataSubject(player.GatewayIp), map[string]interface{}{"res": "ok", "data": string(res)})
+	internal.NatsPool.Publish(constants.GetGamePushDataSubject(player.GatewayIp), map[string]interface{}{"res": "ok", "data": string(res)})
 }
 
 func (self *Room) IsFirstLogin(uid string) bool {

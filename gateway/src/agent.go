@@ -3,8 +3,9 @@ package gateway
 import (
 	"bytes"
 	"compress/zlib"
+	"gateway/src/config"
 	"gateway/src/constants"
-	"gateway/src/log"
+	"gateway/src/internal"
 	"gateway/src/pb"
 	"math"
 	"net/url"
@@ -45,7 +46,7 @@ func NewSendBinaryEvent(msg []byte) *SendEvent {
 
 type Agent struct {
 	Server            *Server
-	Config            *GlobalConfig
+	Config            *config.GlobalConfig
 	DynamicConfig     *DynamicConfig
 	Conn              *websocket.Conn
 	SendQueue         chan *SendEvent
@@ -66,7 +67,6 @@ type Agent struct {
 	IsDisconnected       bool
 	delayDisconnectTimer *time.Timer
 	CachedMsgs           [][]byte
-	Log                  *log.Logger
 	Pid                  string
 	Uid                  string
 	RoomId               string
@@ -80,7 +80,6 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 	timer := time.NewTimer(time.Hour)
 	timer.Stop()
 
-	log := agentMgr.Log
 	self := &Agent{
 		AgentMgr:             agentMgr,
 		Server:               agentMgr.Server,
@@ -97,7 +96,6 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		NextCheckPingFrame:   int(ClientPingInterval / AgentFrameInterval),
 		delayDisconnectTimer: timer,
 		CachedMsgs:           make([][]byte, 0, 64),
-		Log:                  log,
 		Uid:                  "",
 		RoomId:               "",
 		GameId:               "",
@@ -105,7 +103,7 @@ func NewAgent(rawConn *websocket.Conn, agentMgr *AgentMgr, values url.Values) *A
 		RequestGameErrFrame:  0,
 		Counter:              &AtomicCounter{},
 	}
-	log.Info("NewAgent receive connect %+v", values)
+	internal.GLog.Info("NewAgent receive connect %+v", values)
 	self.MsgFromAgentMgr <- func() {
 		self.LoginGame(values.Get("gameId"), values.Get("timestamp"), values.Get("pid"), values.Get("token"))
 	}
@@ -123,7 +121,7 @@ func (self *Agent) readPump() {
 	for {
 		t, msg, err := self.Conn.ReadMessage()
 		if err != nil {
-			self.Log.Error("readPump ReadMessage %+v", err)
+			internal.GLog.Error("readPump ReadMessage %+v", err)
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
 				self.RecvQueue <- func() { self.onMultiError(err) }
 			}
@@ -132,7 +130,7 @@ func (self *Agent) readPump() {
 
 		self.LastPingTimeFrame = self.FrameID
 
-		self.Log.Info("readPump ReadMessage %+v", t)
+		internal.GLog.Info("readPump ReadMessage %+v", t)
 
 		if t == websocket.TextMessage {
 			self.RecvQueue <- func() { self.OnText(string(msg[:])) }
@@ -145,7 +143,7 @@ func (self *Agent) readPump() {
 }
 
 func (self *Agent) OnText(msg string) {
-	self.Log.Info("on longer supports text message %s", msg)
+	internal.GLog.Info("on longer supports text message %s", msg)
 }
 
 func (self *Agent) writePump() {
@@ -158,7 +156,7 @@ func (self *Agent) writePump() {
 		s, ok := <-self.SendQueue
 		if !ok {
 			// close channel.
-			self.Log.Info("writePump close channel ....")
+			internal.GLog.Info("writePump close channel ....")
 			self.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 			break
 		}
@@ -166,7 +164,7 @@ func (self *Agent) writePump() {
 		self.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err := self.Conn.WriteMessage(s.t, s.msg); err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
-				self.Log.Error("uid %v WriteMessage() error, %+v", self.Uid, err)
+				internal.GLog.Error("uid %v WriteMessage() error, %+v", self.Uid, err)
 			}
 
 			break
@@ -224,22 +222,22 @@ func (self *Agent) Run() {
 		case <-self.FrameTicker.C:
 			self.Frame()
 		case <-self.delayDisconnectTimer.C:
-			self.Log.Error("uid %v doDisconnect", self.Uid)
+			internal.GLog.Error("uid %v doDisconnect", self.Uid)
 			self.onMultiClose()
 			return
 		}
 	}
 }
 
-func (obj *Agent) SendBinary(msg []byte) {
-	if !obj.Config.AgentConfig.EnableCachedMsg {
-		obj.SendBinaryNow(msg)
+func (self *Agent) SendBinary(msg []byte) {
+	if !self.Config.AgentConfig.EnableCachedMsg {
+		self.SendBinaryNow(msg)
 		return
 	}
 
-	obj.CachedMsgs = append(obj.CachedMsgs, msg)
-	if len(obj.CachedMsgs) >= obj.Config.AgentConfig.CachedMsgMaxCount {
-		obj.FlushCachedMsgs()
+	self.CachedMsgs = append(self.CachedMsgs, msg)
+	if len(self.CachedMsgs) >= self.Config.AgentConfig.CachedMsgMaxCount {
+		self.FlushCachedMsgs()
 		return
 	}
 }
@@ -256,22 +254,22 @@ func (self *Agent) SendBinaryNow(msg []byte) {
 读取客户端的请求， 进行业务处理
 */
 func (self *Agent) OnBinary(msg []byte) {
-	self.Log.Info("OnBinary begin ... ")
+	internal.GLog.Info("OnBinary begin ... ")
 	var request pb.ClientCommonRequest
 	err := proto.Unmarshal(msg, &request)
 	if err != nil {
-		self.Log.Error("OnBinary invalid request message uid %v read proto err %+v", self.Uid, err)
+		internal.GLog.Error("OnBinary invalid request message uid %v read proto err %+v", self.Uid, err)
 		return
 	}
 
 	// 协议名
 	protoName := request.GetHead().ProtoName
 
-	self.Log.Info("OnBinary protoName %+v ", protoName)
+	internal.GLog.Info("OnBinary protoName %+v ", protoName)
 
 	//检验游戏是否在开放
 	if !self.checkGameOpen() {
-		self.Log.Error("uid %v invalid game request", self.Uid)
+		internal.GLog.Error("uid %v invalid game request", self.Uid)
 		return
 	}
 
@@ -309,7 +307,7 @@ func (self *Agent) OnBinary(msg []byte) {
 	var protoBody proto.Message
 	err = proto.Unmarshal(request.Body, protoBody)
 	if err != nil {
-		self.Log.Error("OnBinary invalid body message uid %v read proto err %+v", self.Uid, err)
+		internal.GLog.Error("OnBinary invalid body message uid %v read proto err %+v", self.Uid, err)
 		return
 	}
 	self.ForwardClientRequest(request.GetHead(), protoBody)
@@ -319,12 +317,12 @@ func (self *Agent) OnBinary(msg []byte) {
 func (self *Agent) checkGameOpen() bool {
 	gameInfo := self.DynamicConfig.GetGameInfo(self.GameId)
 	if gameInfo == nil {
-		self.Log.Warn("checkGameOpen uid %+v get game info err gameId %+v", self.Uid, self.GameId)
+		internal.GLog.Warn("checkGameOpen uid %+v get game info err gameId %+v", self.Uid, self.GameId)
 		return false
 	}
 
 	if gameInfo.Status != 1 {
-		self.Log.Warn("checkGameOpen uid %+v game status %+v err gameId %+v", self.Uid, gameInfo.Status, self.GameId)
+		internal.GLog.Warn("checkGameOpen uid %+v game status %+v err gameId %+v", self.Uid, gameInfo.Status, self.GameId)
 		self.DelayDisconnect(5)
 		return false
 	}
@@ -333,11 +331,11 @@ func (self *Agent) checkGameOpen() bool {
 }
 
 func (self *Agent) OnError(err error) {
-	self.Log.Error("uid %v %+v", self.Uid, err)
+	internal.GLog.Error("uid %v %+v", self.Uid, err)
 }
 
 func (self *Agent) OnClose() {
-	self.Log.Info("OnClose uid %v ...", self.Uid)
+	internal.GLog.Info("OnClose uid %v ...", self.Uid)
 
 	close(self.SendQueue)
 
@@ -437,7 +435,7 @@ func (self *Agent) checkInvalidAgent() {
 
 	self.notifyLostAgent(true)
 
-	self.Log.Info("checkInvalidAgent uid %v delayDisconnect: ping timeout", self.Uid)
+	internal.GLog.Info("checkInvalidAgent uid %v delayDisconnect: ping timeout", self.Uid)
 	self.DelayDisconnect(0)
 }
 
@@ -452,7 +450,7 @@ func (self *Agent) CheckPing() {
 	}
 
 	self.notifyLostAgent(true)
-	self.Log.Info("CheckPing uid %v delayDisconnect: ping timeout", self.Uid)
+	internal.GLog.Info("CheckPing uid %v delayDisconnect: ping timeout", self.Uid)
 	self.DelayDisconnect(0)
 }
 
@@ -476,7 +474,7 @@ func (self *Agent) checkGameException() {
 	if self.RequestGameErrFrame == 0 {
 		return
 	}
-	self.Log.Info("checkGameException %v", self.RequestGameErrFrame)
+	internal.GLog.Info("checkGameException %v", self.RequestGameErrFrame)
 	if self.RequestGameErrFrame < self.FrameID-int(CheckGameExceptionInternal/AgentFrameInterval) {
 		//如果是在大厅，则需要游戏服创建大厅
 		if self.InHall == 1 {
@@ -488,13 +486,13 @@ func (self *Agent) checkGameException() {
 		}
 		self.notifyLostAgent(false)
 
-		self.Log.Info("checkGameException uid %v delayDisconnect: ping timeout", self.Uid)
+		internal.GLog.Info("checkGameException uid %v delayDisconnect: ping timeout", self.Uid)
 		self.DelayDisconnect(0)
 	}
 }
 
 func (self *Agent) DelayDisconnect(delay time.Duration) {
-	self.Log.Info("uid %v try delayDisconnect, %.02fs", self.Uid, delay.Seconds())
+	internal.GLog.Info("uid %v try delayDisconnect, %.02fs", self.Uid, delay.Seconds())
 
 	self.IsDisconnected = true
 	self.delayDisconnectTimer.Reset(delay)
@@ -502,7 +500,7 @@ func (self *Agent) DelayDisconnect(delay time.Duration) {
 
 func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	if self.Config.AgentConfig.EnableLogRecv {
-		self.Log.Debug(" receive ====  gameId [%+v] pid[%+v] token[%+v] t[%+v]",
+		internal.GLog.Debug(" receive ====  gameId [%+v] pid[%+v] token[%+v] t[%+v]",
 			gameId, pid, token, t)
 	}
 
@@ -534,7 +532,7 @@ func (self *Agent) LoginGame(gameId, t, pid, token string) int {
 	//调用ucenter获取 userId
 	uid, err := g_Server.UCenterMgr.ApplyUid(pid)
 	if err != nil {
-		self.Log.Error("EnterGame  %+v apply err %+v", pid, err)
+		internal.GLog.Error("EnterGame  %+v apply err %+v", pid, err)
 		self.DoLoginReply(constants.SYSTEM_ERROR, "system err")
 		return -1
 	}
@@ -558,7 +556,7 @@ func (self *Agent) CallMatchResponse(res *pb.MatchOverRes) {
 
 func (self *Agent) ProcGamePushMessage(res *pb.GamePushMessage) {
 	head := res.GetHead()
-	self.Log.Info("ProcGamePushMessage gameId %+v uid %+v protoName %+v ", head.GetGameId(), head.GetUid(), head.GetPbName())
+	internal.GLog.Info("ProcGamePushMessage gameId %+v uid %+v protoName %+v ", head.GetGameId(), head.GetUid(), head.GetPbName())
 	var protoMessage proto.Message
 	proto.Unmarshal([]byte(res.GetData()), protoMessage)
 
@@ -573,7 +571,7 @@ func (self *Agent) ReplyClient(head *pb.ClientCommonHead, msg proto.Message) {
 	protoName := proto.MessageName(msg)
 	body, err := proto.Marshal(msg)
 	if err != nil {
-		self.Log.Error("ReplyClient protoName marshal body  %+v err %+v ", protoName, err)
+		internal.GLog.Error("ReplyClient protoName marshal body  %+v err %+v ", protoName, err)
 		return
 	}
 
@@ -588,7 +586,7 @@ func (self *Agent) ReplyClient(head *pb.ClientCommonHead, msg proto.Message) {
 
 	res, err := proto.Marshal(response)
 	if err != nil {
-		self.Log.Error("ReplyClient protoName marshal response %+v err %+v", protoName, err)
+		internal.GLog.Error("ReplyClient protoName marshal response %+v err %+v", protoName, err)
 		return
 	}
 

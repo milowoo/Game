@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"gateway/src/internal"
 	"gateway/src/pb"
 	"time"
 )
@@ -10,7 +11,7 @@ import (
 */
 
 func (agent *Agent) HeartBeatHandler(head *pb.ClientCommonHead, request *pb.HeartbeatRequest) {
-	agent.Log.Info("HeartBeatHandler %+v", request)
+	internal.GLog.Info("HeartBeatHandler %+v", request)
 	response := &pb.HeartbeatResponse{Timestamp: time.Now().Unix()}
 	// agent.GamePing()
 	agent.ReplyClient(head, response)

@@ -3,33 +3,21 @@ package game_frame
 import (
 	"encoding/json"
 	"game_frame/src/domain"
-	"game_frame/src/log"
-	"game_frame/src/redis"
-	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
+	"game_frame/src/internal"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
 
 type DynamicConfig struct {
-	Server      *Server
-	NacosConfig *NacosConfig
-	redisDao    *redis.RedisDao
-	log         *log.Logger
-	GameInfo    *domain.GameInfo
-	Client      config_client.IConfigClient
-	gameChange  chan string
-	exit        chan bool
+	Server   *Server
+	GameInfo *domain.GameInfo
+	exit     chan bool
 }
 
 func NewDynamicConfig(server *Server) *DynamicConfig {
 	config := &DynamicConfig{
-		Server:      server,
-		redisDao:    server.RedisDao,
-		NacosConfig: server.Config.NacosConfig,
-		log:         server.Log,
-		GameInfo:    nil,
-		Client:      server.ConfigClient,
-		gameChange:  make(chan string, 100),
-		exit:        make(chan bool, 1),
+		Server:   server,
+		GameInfo: nil,
+		exit:     make(chan bool, 1),
 	}
 
 	return config
@@ -39,18 +27,18 @@ func (self *DynamicConfig) Run() {
 	defer func() {
 		p := recover()
 		if p != nil {
-			self.log.Info("execute panic recovered and going to stop: %v", p)
+			internal.GLog.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
 
 	self.syncGameData(self.Server.Config.GameId)
 
-	_ = self.Client.ListenConfig(vo.ConfigParam{
-		DataId: self.NacosConfig.GameDataId,
-		Group:  self.NacosConfig.GameGroup,
+	_ = internal.ConfigClient.ListenConfig(vo.ConfigParam{
+		DataId: self.Server.Config.NacosConfig.GameDataId,
+		Group:  self.Server.Config.NacosConfig.GameGroup,
 		OnChange: func(namespace, group, dataId, data string) {
-			self.log.Info("config changed group: %+v dataId: %v content: %+v", group, dataId, data)
-			self.gameChange <- data
+			internal.GLog.Info("config changed group: %+v dataId: %v content: %+v", group, dataId, data)
+			self.syncGameData(data)
 		},
 	})
 
@@ -66,16 +54,6 @@ func (self *DynamicConfig) Run() {
 			{
 				return
 			}
-
-		case <-self.gameChange:
-			{
-				gameId := <-self.gameChange
-
-				if self.GameInfo.GameId == gameId {
-					self.syncGameData(gameId)
-				}
-			}
-
 		default:
 			// do nothing
 		}
@@ -83,8 +61,8 @@ func (self *DynamicConfig) Run() {
 }
 
 func (self *DynamicConfig) syncGameData(gameId string) {
-	data, _ := self.redisDao.Get(gameId)
-	self.log.Info("syncGameData gameId %+v data %+v", gameId, data)
+	data, _ := internal.RedisDao.Get(gameId)
+	internal.GLog.Info("syncGameData gameId %+v data %+v", gameId, data)
 	var gameInfo domain.GameInfo
 	json.Unmarshal([]byte(data), &gameInfo)
 	self.GameInfo = &gameInfo
@@ -92,7 +70,7 @@ func (self *DynamicConfig) syncGameData(gameId string) {
 }
 
 func (self *DynamicConfig) Quit() {
-	self.log.Info(" dynamic config quit game")
+	internal.GLog.Info(" dynamic config quit game")
 	self.exit <- true
 }
 

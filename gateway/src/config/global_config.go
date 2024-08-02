@@ -1,168 +1,129 @@
-package gateway
+package config
 
 import (
 	"fmt"
-	"gateway/src/log"
+	"gateway/src/domain"
+	"gateway/src/internal"
 	"github.com/go-ini/ini"
 	"time"
 )
 
 type GlobalConfig struct {
-	Client      *NetworkAsServer
-	AgentConfig *AgentConfig
-	RedisConfig *RedisConfig
-	NatsConfig  *NatsConfig
-	NacosConfig *NacosConfig
+	Client      *domain.NetworkConfig
+	AgentConfig *domain.AgentConfig
+	RedisConfig *domain.RedisConfig
+	NatsConfig  *domain.NatsConfig
+	NacosConfig *domain.NacosConfig
 
 	MaxClient int
-}
-
-type NetworkAsServer struct {
-	ListenIp   string
-	ListenPort int
-	Timeout    int
-	HMACKey    string
-}
-
-type AgentConfig struct {
-	EnableLogSend          bool
-	EnableLogRecv          bool
-	EnableCheckPing        bool
-	EnableCheckLoginParams bool
-
-	EnableCachedMsg   bool
-	EnableCompressMsg bool
-
-	CachedMsgMaxCount        int
-	CompressMsgSizeThreshold int
-
-	TimestampExpireDuration time.Duration
-}
-
-type RedisConfig struct {
-	Address    string
-	MasterName string
-	Password   string
-}
-
-type NatsConfig struct {
-	Address string
-}
-
-type NacosConfig struct {
-	Ip         string
-	Port       uint64
-	SpaceId    string
-	GameGroup  string
-	GameDataId string
 }
 
 const (
 	CFG_NAME = "/Users/wuchuangeng/game/gateway/conf/game.ini"
 )
 
-func NewGlobalConfig(log *log.Logger) (*GlobalConfig, error) {
+func NewGlobalConfig() (*GlobalConfig, error) {
 	ret := &GlobalConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
-		log.Error("load file game.ini err ")
+		internal.GLog.Error("load file game.ini err ")
 		return nil, err
 	}
 
 	section, err := cfg.GetSection("gateway")
 	if err != nil {
-		log.Error("get room section  err ")
+		internal.GLog.Error("get room section  err ")
 		return nil, err
 	}
 
 	key, err := section.GetKey("level")
 	if err != nil {
-		log.ResetLevel("info")
+		internal.GLog.ResetLevel("info")
 	} else {
 		logLevel := key.String()
-		log.ResetLevel(logLevel)
+		internal.GLog.ResetLevel(logLevel)
 	}
 
 	key, err = section.GetKey("maxClient")
 	if err != nil {
-		log.Error("get  section key maxClient  err ")
+		internal.GLog.Error("get  section key maxClient  err ")
 		return nil, err
 	}
 	ret.MaxClient = key.MustInt()
 
-	ret.RedisConfig, err = NewRedisConfig(log)
+	ret.RedisConfig, err = NewRedisConfig()
 	if err != nil {
-		log.Error("get redis section key  err ")
+		internal.GLog.Error("get redis section key  err ")
 		return nil, err
 	}
 
-	ret.AgentConfig, err = NewAgentConfig(log)
+	ret.AgentConfig, err = NewAgentConfig()
 	if err != nil {
-		log.Error("get agent section key  err ")
+		internal.GLog.Error("get agent section key  err ")
 		return nil, err
 	}
 
-	ret.NatsConfig, err = NewNatsConfig(log)
+	ret.NatsConfig, err = NewNatsConfig()
 	if err != nil {
-		log.Error("get nats section key  err ")
+		internal.GLog.Error("get nats section key  err ")
 		return nil, err
 	}
 
-	ret.NacosConfig, err = LoadNacosConfig(log)
+	ret.NacosConfig, err = LoadNacosConfig()
 	if err != nil {
-		log.Error("get nacos section key  err ")
+		internal.GLog.Error("get nacos section key  err ")
 		return nil, err
 	}
 
-	ret.Client, err = LoadClientConfig(log)
+	ret.Client, err = LoadClientConfig()
 	if err != nil {
-		log.Error("get client section key  err ")
+		internal.GLog.Error("get client section key  err ")
 		return nil, err
 	}
 
-	log.Info("NewGlobalConfig  success")
+	internal.GLog.Info("NewGlobalConfig  success")
 
 	return ret, nil
 }
 
-func LoadClientConfig(log *log.Logger) (*NetworkAsServer, error) {
-	ret := &NetworkAsServer{}
+func LoadClientConfig() (*domain.NetworkConfig, error) {
+	ret := &domain.NetworkConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
-		log.Error("load file game.ini err ")
+		internal.GLog.Error("load file game.ini err ")
 		return nil, err
 	}
 
 	section, err := cfg.GetSection("client")
 	if err != nil {
-		log.Error("get client  err ")
+		internal.GLog.Error("get client  err ")
 		return nil, err
 	}
 
 	key, err := section.GetKey("listenIp")
 	if err != nil {
-		log.Error("get client section key listenIp  err ")
+		internal.GLog.Error("get client section key listenIp  err ")
 		return nil, err
 	}
 	ret.ListenIp = key.MustString("127.0.0.1")
 
 	key, err = section.GetKey("port")
 	if err != nil {
-		log.Error("get client section key masterName  err ")
+		internal.GLog.Error("get client section key masterName  err ")
 		return nil, err
 	}
 	ret.ListenPort = key.MustInt(36001)
 
 	key, err = section.GetKey("timeout")
 	if err != nil {
-		log.Error("get client section key timeout  err ")
+		internal.GLog.Error("get client section key timeout  err ")
 		return nil, err
 	}
 	ret.Timeout = key.MustInt(10)
 
 	key, err = section.GetKey("hmacKey")
 	if err != nil {
-		log.Error("get client section key hmacKey  err ")
+		internal.GLog.Error("get client section key hmacKey  err ")
 		return nil, err
 	}
 	ret.HMACKey = key.MustString("xxx")
@@ -170,114 +131,114 @@ func LoadClientConfig(log *log.Logger) (*NetworkAsServer, error) {
 	return ret, nil
 }
 
-func NewAgentConfig(log *log.Logger) (*AgentConfig, error) {
-	ret := &AgentConfig{}
+func NewAgentConfig() (*domain.AgentConfig, error) {
+	ret := &domain.AgentConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
-		log.Error("load file game.ini err ")
+		internal.GLog.Error("load file game.ini err ")
 		return nil, err
 	}
 
 	section, err := cfg.GetSection("agent")
 	if err != nil {
-		log.Error("get agent  err ")
+		internal.GLog.Error("get agent  err ")
 		return nil, err
 	}
 
 	key, err := section.GetKey("enableLogSend")
 	if err != nil {
-		log.Error("get agent key enableLogSend err ")
+		internal.GLog.Error("get agent key enableLogSend err ")
 		return nil, err
 	}
 	ret.EnableLogSend = key.MustBool(false)
 
 	key, err = section.GetKey("enableLogRecv")
 	if err != nil {
-		log.Error("get room agent key enableLogRecv err ")
+		internal.GLog.Error("get room agent key enableLogRecv err ")
 		return nil, err
 	}
 	ret.EnableLogRecv = key.MustBool(false)
 
 	key, err = section.GetKey("enableCheckPing")
 	if err != nil {
-		log.Error("get agent key enableCheckPing err ")
+		internal.GLog.Error("get agent key enableCheckPing err ")
 		return nil, err
 	}
 	ret.EnableCheckPing = key.MustBool(true)
 
 	key, err = section.GetKey("enableCheckLoginParams")
 	if err != nil {
-		log.Error("get agent key enableCheckLoginParams err ")
+		internal.GLog.Error("get agent key enableCheckLoginParams err ")
 		return nil, err
 	}
 	ret.EnableCheckLoginParams = key.MustBool(true)
 
 	key, err = section.GetKey("enableCachedMsg")
 	if err != nil {
-		log.Error("get agent key enableCachedMsg err ")
+		internal.GLog.Error("get agent key enableCachedMsg err ")
 		return nil, err
 	}
 	ret.EnableCachedMsg = key.MustBool(true)
 
 	key, err = section.GetKey("enableCompressMsg")
 	if err != nil {
-		log.Error("get agent key enableCompressMsg err ")
+		internal.GLog.Error("get agent key enableCompressMsg err ")
 		return nil, err
 	}
 	ret.EnableCompressMsg = key.MustBool(false)
 
 	ret.CachedMsgMaxCount, err = LoadPositiveIntFromIniSection(section, "cachedMsgMaxCount")
 	if err != nil {
-		log.Error("get agent key cachedMsgMaxCount err ")
+		internal.GLog.Error("get agent key cachedMsgMaxCount err ")
 		return nil, err
 	}
 
 	ret.CompressMsgSizeThreshold, err = LoadPositiveIntFromIniSection(section, "compressMsgSizeThreshold")
 	if err != nil {
-		log.Error("get agent key compressMsgSizeThreshold err ")
+		internal.GLog.Error("get agent key compressMsgSizeThreshold err ")
 		return nil, err
 	}
 
 	ret.TimestampExpireDuration, err = LoadSecondFromIniSection(section, "timestampExpireSeconds")
 	if err != nil {
-		log.Error("get room agent key timestampExpireSeconds err ")
+		internal.GLog.Error("get room agent key timestampExpireSeconds err ")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func NewRedisConfig(log *log.Logger) (*RedisConfig, error) {
-	ret := &RedisConfig{}
+func NewRedisConfig() (*domain.RedisConfig, error) {
+	ret := &domain.RedisConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
-		log.Error("load file game.ini err ")
+		internal.GLog.Error("load file game.ini err ")
 		return nil, err
 	}
 
 	section, err := cfg.GetSection("redis")
 	if err != nil {
-		log.Error("get redis  err ")
+		internal.GLog.Error("get redis  err ")
 		return nil, err
 	}
 
 	key, err := section.GetKey("address")
 	if err != nil {
-		log.Error("get redis section key maxClient  err ")
+		internal.GLog.Error("get redis section key maxClient  err ")
 		return nil, err
 	}
 	ret.Address = key.MustString("127.0.0.1:6377")
 
 	key, err = section.GetKey("masterName")
 	if err != nil {
-		log.Error("get redis section key masterName  err ")
+		internal.GLog.Error("get redis section key masterName  err ")
 		return nil, err
 	}
 	ret.MasterName = key.MustString("")
 
 	key, err = section.GetKey("password")
 	if err != nil {
-		log.Error("get redis section key password  err ")
+		internal.GLog.Error("get redis section key password  err ")
 		return nil, err
 	}
 	ret.Password = key.MustString("")
@@ -285,74 +246,74 @@ func NewRedisConfig(log *log.Logger) (*RedisConfig, error) {
 	return ret, nil
 }
 
-func NewNatsConfig(log *log.Logger) (*NatsConfig, error) {
-	ret := &NatsConfig{}
+func NewNatsConfig() (*domain.NatsConfig, error) {
+	ret := &domain.NatsConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
-		log.Error("load file game.ini err ")
+		internal.GLog.Error("load file game.ini err ")
 		return nil, err
 	}
 
 	section, err := cfg.GetSection("nats")
 	if err != nil {
-		log.Error("get redis  err ")
+		internal.GLog.Error("get redis  err ")
 		return nil, err
 	}
 
 	key, err := section.GetKey("address")
 	if err != nil {
-		log.Error("get room section key maxClient  err ")
+		internal.GLog.Error("get room section key maxClient  err ")
 		return nil, err
 	}
 	ret.Address = key.MustString("127.0.0.1:6377")
 	return ret, nil
 }
 
-func LoadNacosConfig(log *log.Logger) (*NacosConfig, error) {
-	ret := &NacosConfig{}
+func LoadNacosConfig() (*domain.NacosConfig, error) {
+	ret := &domain.NacosConfig{}
 	cfg, err := ini.Load(CFG_NAME)
 	if err != nil {
-		log.Error("load file game.ini err ")
+		internal.GLog.Error("load file game.ini err ")
 		return nil, err
 	}
 
 	section, err := cfg.GetSection("nacos")
 	if err != nil {
-		log.Error("get nacos  err ")
+		internal.GLog.Error("get nacos  err ")
 		return nil, err
 	}
 
 	key, err := section.GetKey("ip")
 	if err != nil {
-		log.Error("get nacos section key Ip  err ")
+		internal.GLog.Error("get nacos section key Ip  err ")
 		return nil, err
 	}
 	ret.Ip = key.MustString("127.0.0.1")
 
 	key, err = section.GetKey("port")
 	if err != nil {
-		log.Error("get nacos section key port  err ")
+		internal.GLog.Error("get nacos section key port  err ")
 		return nil, err
 	}
 	ret.Port = key.MustUint64(8848)
 
 	key, err = section.GetKey("spaceId")
 	if err != nil {
-		log.Error("get nacos section key spaceId  err ")
+		internal.GLog.Error("get nacos section key spaceId  err ")
 		return nil, err
 	}
 	ret.SpaceId = key.MustString("xxxx")
 
 	key, err = section.GetKey("gameGroup")
 	if err != nil {
-		log.Error("get nacos section key gameGroup  err ")
+		internal.GLog.Error("get nacos section key gameGroup  err ")
 		return nil, err
 	}
 	ret.GameGroup = key.MustString("gameGroup")
 
 	key, err = section.GetKey("gameDataId")
 	if err != nil {
-		log.Error("get nacos section key gameDataId  err ")
+		internal.GLog.Error("get nacos section key gameDataId  err ")
 		return nil, err
 	}
 	ret.GameDataId = key.MustString("gameDataId")

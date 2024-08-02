@@ -2,9 +2,8 @@ package game_frame
 
 import (
 	"game_frame/src/constants"
-	"game_frame/src/log"
+	"game_frame/src/internal"
 	"game_frame/src/pb"
-	"game_frame/src/redis"
 	"github.com/golang/protobuf/proto"
 	"math/rand"
 	"sync"
@@ -17,14 +16,8 @@ const (
 
 type RoomMgr struct {
 	Server      *Server
-	Log         *log.Logger
 	MsgFromNats chan Closure
 	MsgFromRoom chan Closure
-
-	GlobalConfig  *GlobalConfig
-	DynamicConfig *DynamicConfig
-
-	RedisDao *redis.RedisDao
 
 	rand      *rand.Rand
 	roomMutex sync.Mutex
@@ -32,21 +25,16 @@ type RoomMgr struct {
 	frameTimer *time.Ticker
 	id2Room    map[string]*Room
 	frameId    int
-
-	isQuit bool
-	exit   chan bool
+	isQuit     bool
+	exit       chan bool
 }
 
 func NewRoomMgr(sever *Server) *RoomMgr {
 	now := time.Now()
 	roomMgr := &RoomMgr{
-		Server:        sever,
-		Log:           sever.Log,
-		MsgFromNats:   make(chan Closure, 10*1024),
-		MsgFromRoom:   make(chan Closure, 2*1024),
-		GlobalConfig:  sever.Config,
-		DynamicConfig: sever.DynamicConfig,
-		RedisDao:      sever.RedisDao,
+		Server:      sever,
+		MsgFromNats: make(chan Closure, 10*1024),
+		MsgFromRoom: make(chan Closure, 2*1024),
 
 		rand:       rand.New(rand.NewSource(now.Unix())),
 		frameTimer: time.NewTicker(RoomMgrFrameInterval),
@@ -64,7 +52,7 @@ func (self *RoomMgr) Run() {
 	defer func() {
 		p := recover()
 		if p != nil {
-			self.Log.Info("execute panic recovered and going to stop: %v", p)
+			internal.GLog.Info("execute panic recovered and going to stop: %v", p)
 		}
 	}()
 
@@ -72,18 +60,18 @@ func (self *RoomMgr) Run() {
 	defer func() {
 		self.Server.WaitGroup.Done()
 	}()
-ALL:
+
 	for {
 		// 优先查看exit，
 		select {
 		case <-self.exit:
 			{
-				self.Quit()
 				return
 			}
 		case c, ok := <-self.MsgFromNats:
 			if !ok {
-				break ALL
+				self.Quit()
+				return
 			}
 			SafeRunClosure(self, c)
 		case c, _ := <-self.MsgFromRoom:
@@ -94,7 +82,6 @@ ALL:
 			})
 		}
 	}
-
 }
 
 func (self *RoomMgr) Frame() {
@@ -102,6 +89,12 @@ func (self *RoomMgr) Frame() {
 }
 
 func (self *RoomMgr) Quit() {
+	if self.isQuit {
+		return
+	}
+
+	self.isQuit = true
+
 	// 通知所有room强制存储并退出
 	for _, room := range self.id2Room {
 		RunOnRoom(room.MsgFromMgr, room, func(input *Room) {
@@ -109,38 +102,35 @@ func (self *RoomMgr) Quit() {
 		})
 	}
 
-	for len(self.id2Room) > 0 {
-		c := <-self.MsgFromRoom
-		SafeRunClosure(self, c)
-	}
-	self.Log.Info("room mgr quit ...")
+	self.exit <- true
+	internal.GLog.Info("room mgr quit ...")
 }
 
 func (self *RoomMgr) ProcessGatewayRequest(reply string, msg interface{}) {
 	dataMap := msg.(map[string]interface{})
 	head, data := ConvertRequest(dataMap)
-	self.Log.Info("ProcessGatewayRequest uid %v  roomId %+v proto Name [%+v] hostIp [%v].....",
+	internal.GLog.Info("ProcessGatewayRequest uid %v  roomId %+v proto Name [%+v] hostIp [%v].....",
 		head.GetUid(), head.GetRoomId(), head.GetPbName(), head.GetGatewayIp())
 
 	if head.GetGameId() != self.Server.Config.GameId {
 		commonRes := &pb.GameCommonResponse{}
-		self.Log.Error("ProcessGatewayRequest invalid nat data %+v ", head.GameId)
+		internal.GLog.Error("ProcessGatewayRequest invalid nat data %+v ", head.GameId)
 		commonRes.Code = constants.INVALID_BODY
 		commonRes.Msg = "Unmarshal request err"
 		res, _ := proto.Marshal(commonRes)
-		self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+		internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 		return
 	}
 
 	room := self.GetOrCreateRoom(head)
 	if room == nil {
 		commonRes := &pb.GameCommonResponse{}
-		self.Log.Error("ProcessGatewayRequest invalid proto [%+v] roomId [%+v] uid [%+v]",
+		internal.GLog.Error("ProcessGatewayRequest invalid proto [%+v] roomId [%+v] uid [%+v]",
 			head.GetPbName(), head.GetRoomId(), head.GetUid())
 		commonRes.Code = constants.SYSTEM_ERROR
 		commonRes.Msg = "system err"
 		res, _ := proto.Marshal(commonRes)
-		self.Server.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+		internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 		return
 	}
 
@@ -160,13 +150,13 @@ func (self *RoomMgr) GetOrCreateRoom(head *pb.CommonHead) *Room {
 
 	//如果不是进入房间/ 大厅的协议，就是非法的请求
 	if head.GetPbName() != "pb.LoginHallRequest" && head.GetPbName() != "pb.LoginRoomRequest" {
-		self.Log.Info("GetOrCreateRoom invalid request proto name %+v", head.GetPbName())
+		internal.GLog.Info("GetOrCreateRoom invalid request proto name %+v", head.GetPbName())
 		return nil
 	}
 
 	newRoom, err := NewRoom(self, head.RoomId)
 	if err != nil {
-		self.Log.Error("big err create room err %s", head.RoomId)
+		internal.GLog.Error("big err create room err %s", head.RoomId)
 		return nil
 	}
 

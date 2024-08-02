@@ -1,15 +1,16 @@
 package gateway
 
 import (
+	"gateway/src/internal"
 	"github.com/golang/protobuf/proto"
 	"strconv"
 	"time"
 )
 
 func (agent *Agent) RequestToGame(protoName string, protoMsg proto.Message) ([]byte, error) {
-	agent.Log.Info("PublicToGame protoName %+v", protoName)
+	internal.GLog.Info("PublicToGame protoName %+v", protoName)
 	if len(agent.GameSubject) < 1 {
-		agent.Log.Error("PublicToGame invalid request %+v", protoName)
+		internal.GLog.Error("PublicToGame invalid request %+v", protoName)
 		return nil, nil
 	}
 
@@ -28,11 +29,11 @@ func (agent *Agent) RequestToGame(protoName string, protoMsg proto.Message) ([]b
 	}
 
 	var response interface{}
-	agent.Log.Info("RequestToGame uid %+v roomId %+v protoName %+v HostIp %+v",
+	internal.GLog.Info("RequestToGame uid %+v roomId %+v protoName %+v HostIp %+v",
 		agent.Uid, agent.RoomId, protoName, GetHostIp())
-	err := agent.Server.NatsPool.Request(agent.GameSubject, head, &response, 3*time.Second)
+	err := internal.NatsPool.Request(agent.GameSubject, head, &response, 3*time.Second)
 	if err != nil {
-		agent.Log.Error("uid %v protoName %v public to game game err %+v", agent.Uid, protoName, err)
+		internal.GLog.Error("uid %v protoName %v public to game game err %+v", agent.Uid, protoName, err)
 		if agent.RequestGameErrFrame == 0 {
 			agent.RequestGameErrFrame = agent.FrameID
 		}

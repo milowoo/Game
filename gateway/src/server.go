@@ -3,7 +3,8 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"gateway/src/log"
+	"gateway/src/config"
+	"gateway/src/internal"
 	"gateway/src/mq"
 	"gateway/src/redis"
 	"github.com/gorilla/websocket"
@@ -21,26 +22,22 @@ import (
 var g_Server *Server
 
 type Server struct {
-	Log           *log.Logger
-	Config        *GlobalConfig
+	Config        *config.GlobalConfig
 	WaitGroup     *sync.WaitGroup
 	AgentMgr      *AgentMgr
 	DynamicConfig *DynamicConfig
-	NatsPool      *mq.NatsPool
 	MatchMgr      *NatsMatch
 	UCenterMgr    *NatsUCenter
 	NatsGame      *NatsGame
-	RedisDao      *redis.RedisDao
-	ConfigClient  config_client.IConfigClient
 
 	svr    *http.Server
 	isQuit bool
 }
 
-func NewServer(log *log.Logger) (*Server, error) {
-	config, err := NewGlobalConfig(log)
+func NewServer() (*Server, error) {
+	config, err := config.NewGlobalConfig()
 	if err != nil {
-		log.Error("NewServer log config err")
+		internal.GLog.Error("NewServer log config err")
 		return nil, err
 	}
 
@@ -48,23 +45,22 @@ func NewServer(log *log.Logger) (*Server, error) {
 		Config:    config,
 		WaitGroup: &sync.WaitGroup{},
 		svr:       nil,
-		Log:       log,
 	}
 
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
-	g_Server.RedisDao = redisDao
+	internal.RedisDao = redisDao
 
 	natsPool, err := mq.NatsInit(config.NatsConfig.Address)
 	if err != nil {
-		log.Error("nats 连接失败 %+v", err)
+		internal.GLog.Error("nats 连接失败 %+v", err)
 		return nil, err
 	}
 
-	g_Server.NatsPool = natsPool
+	internal.NatsPool = natsPool
 
-	g_Server.ConfigClient, err = g_Server.InitNacos(config)
+	internal.ConfigClient, err = g_Server.InitNacos(config)
 	if err != nil {
-		log.Error("nacos 连接失败 %+v", err)
+		internal.GLog.Error("nacos 连接失败 %+v", err)
 		return nil, err
 	}
 
@@ -93,7 +89,7 @@ var UPGRADER = websocket.Upgrader{
 // 通知服务器退出
 
 func (self *Server) Quit() {
-	self.Log.Info("server quit ...")
+	internal.GLog.Info("server quit ...")
 	if self.isQuit {
 		return
 	}
@@ -115,7 +111,7 @@ func (self *Server) Quit() {
 	self.WaitGroup.Done()
 }
 
-func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClient, error) {
+func (server *Server) InitNacos(config *config.GlobalConfig) (config_client.IConfigClient, error) {
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig(config.NacosConfig.Ip, config.NacosConfig.Port, constant.WithContextPath("/nacos")),
 	}
@@ -139,7 +135,7 @@ func (server *Server) InitNacos(config *GlobalConfig) (config_client.IConfigClie
 	)
 
 	if err != nil {
-		log.Error("nacos 连接失败 %+v", err)
+		internal.GLog.Error("nacos 连接失败 %+v", err)
 		panic(err)
 		return nil, err
 	}
@@ -160,7 +156,7 @@ func (self *Server) Join() {
 
 func (self *Server) ListenAndServe() {
 	if self.svr != nil {
-		self.Log.Error("error: ListenAndServe() repeatedly")
+		internal.GLog.Error("error: ListenAndServe() repeatedly")
 		return
 	}
 
@@ -173,7 +169,7 @@ func (self *Server) ListenAndServe() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawConn, err := UPGRADER.Upgrade(w, r, nil)
 		if err != nil {
-			self.Log.Error("UPGRADER.Upgrade(): %+v", err)
+			internal.GLog.Error("UPGRADER.Upgrade(): %+v", err)
 			return
 		}
 
@@ -185,11 +181,11 @@ func (self *Server) ListenAndServe() {
 		self.WaitGroup.Add(1) // 对应本携程
 		defer self.WaitGroup.Done()
 
-		self.Log.Info("gateway listen on %s", addr)
+		internal.GLog.Info("gateway listen on %s", addr)
 
 		err := self.svr.ListenAndServe()
 		if err != nil {
-			self.Log.Error("error, ListenAndServe: %+v", err)
+			internal.GLog.Error("error, ListenAndServe: %+v", err)
 		}
 
 		self.svr = nil
@@ -198,7 +194,7 @@ func (self *Server) ListenAndServe() {
 
 func (self *Server) Run() {
 	if self.Config == nil {
-		self.Log.Error("Config is nil ...")
+		internal.GLog.Error("Config is nil ...")
 		self.Quit()
 	}
 
@@ -215,7 +211,7 @@ func (self *Server) Run() {
 	signal.Notify(c, os.Interrupt, os.Kill)
 	go func() {
 		<-c
-		self.Log.Warn("exit svr by signal ...")
+		internal.GLog.Warn("exit svr by signal ...")
 		self.Quit()
 	}()
 
