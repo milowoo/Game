@@ -12,7 +12,7 @@ import (
 
 func (agent *Agent) GamePing() {
 	request := &pb.PingRequest{
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	protoName := proto.MessageName(request)

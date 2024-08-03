@@ -102,7 +102,7 @@ func Receive(message []byte) {
 }
 
 func (u *URL) String() string {
-	tm := time.Now().Unix()
+	tm := time.Now().UnixMilli()
 
 	rawURL, _ := url.Parse(u.Addr)
 
@@ -118,14 +118,14 @@ func (u *URL) String() string {
 
 func HeartBeat(conn *websocket.Conn) {
 	req := &pb.HeartbeatRequest{
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 	bytes, _ := proto.Marshal(req)
 	head := &pb.ClientCommonHead{
 		Pid:       test.UUID(),
 		Sn:        gCounter.GetIncrementValue(),
 		ProtoName: proto.MessageName(req),
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	request := &pb.ClientCommonRequest{

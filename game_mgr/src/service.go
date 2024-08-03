@@ -10,15 +10,19 @@ import (
 	"game_mgr/src/internal"
 	"game_mgr/src/mongo"
 	"game_mgr/src/mq"
+	"game_mgr/src/pb"
 	"game_mgr/src/redis"
+	"github.com/golang/protobuf/proto"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
+	"github.com/nats-io/go-nats"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 )
 
 // http 服务主要处理匹配回调
@@ -109,15 +113,60 @@ func (server *HttpService) InitNacos(globalConfig *config.GlobalConfig) (config_
 }
 
 func (self *HttpService) Run() {
+	self.SubjectMatchResponse()
+	//self.subscribeMatchRequest()
 	self.listenHttpServer()
-
 	for {
 		select {
 		case <-self.StopChan:
-			fmt.Println("http service received stop signal")
+			internal.GLog.Info("http service received stop signal")
 			return
 		}
 	}
+}
+
+func (self *HttpService) subscribeMatchRequest() {
+	// 订阅Nats 匹配 主题
+	err := internal.NatsPool.SubscribeForRequest(constants.MATCH_SUBJECT, func(subj, reply string, msg interface{}) {
+		internal.GLog.Info("subscribeMatchRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
+		req, err := ConvertInterfaceToString(msg)
+		if err == nil {
+			var request pb.MatchRequest
+			proto.Unmarshal([]byte(req), &request)
+			internal.GLog.Info("subscribeMatchRequest %+v", request)
+			response := &pb.MatchResponse{
+				Code: constants.CODE_SUCCESS,
+			}
+			res, _ := proto.Marshal(response)
+			internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+		}
+
+	})
+
+	if err != nil {
+		internal.GLog.Error("subscribeMatchRequest err %+v", err)
+	}
+
+}
+
+func ConvertInterfaceToString(data interface{}) (string, error) {
+	// 使用 reflect 包检查 data 是否为 string 类型
+	if reflect.TypeOf(data).Kind() != reflect.String {
+		return "", fmt.Errorf("expected a string, got %T", data)
+	}
+
+	// 如果是 string 类型，返回其数据
+	return data.(string), nil
+}
+
+func (self *HttpService) SubjectMatchResponse() {
+	internal.GLog.Info("SubjectMatchResponse subject %+v", constants.MATCH_OVER_SUBJECT)
+	internal.NatsPool.Subscribe(constants.MATCH_OVER_SUBJECT, func(mess *nats.Msg) {
+		var matchOverRes pb.MatchOverRes
+		internal.GLog.Info("SubjectMatchResponse adafadf")
+		_ = proto.Unmarshal(mess.Data, &matchOverRes)
+		internal.GLog.Info("SubjectMatchResponse %+v", matchOverRes)
+	})
 }
 
 func (self *HttpService) listenHttpServer() {

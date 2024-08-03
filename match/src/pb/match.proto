@@ -27,10 +27,10 @@ message MatchRequest{
   string gameId = 1;
   string pid = 2;
   string uid = 3;
-  int64 timeStamp = 4;
-  int32 score = 5;
-  string receiveSubject = 6;
-  string opt  = 7; //匹配保留字段  hall 代表进入大厅 否则就是进入room
+  string receiveSubject = 4;
+  string opt  = 5; //匹配保留字段  hall 代表进入大厅 否则就是进入room
+  string timeStamp = 6;
+  string score = 7;
 }
 
 // 返回：匹配应答
@@ -66,12 +66,12 @@ message MatchOverRes {
   string uid = 4;
   string pid = 5;
   string roomId = 6;          // 新的roomId
-  int64 timestamp = 7;        // 服务器时间戳（毫秒）
-  string opt = 8;             // 透传字段
-  string sign = 9;            // 签名
-  repeated MatchData uidList = 10;  //匹配玩家信息
-  repeated MatchData aiUidList = 11;  //ai Uid
-  string gameIp = 12;
+  string gameIp = 7;
+  string timestamp = 8;        // 服务器时间戳（毫秒）
+  string opt = 9;             // 透传字段
+  string sign = 10;             // 签名
+  repeated MatchData uidList = 11;  //匹配玩家信息
+  repeated MatchData aiUidList = 12;  //ai Uid
 }
 
 

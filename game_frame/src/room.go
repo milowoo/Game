@@ -215,7 +215,7 @@ func (self *Room) SaveAndQuit() {
 }
 
 func (self *Room) ResponseGateway(reply string, head *pb.CommonHead, response proto.Message) {
-	head.Timestamp = time.Now().Unix()
+	head.Timestamp = time.Now().UnixMilli()
 	bytes, _ := proto.Marshal(response)
 	res := &pb.GameCommonResponse{
 		Code: constants.CODE_SUCCESS,
@@ -250,7 +250,7 @@ func (self *Room) Send2PlayerMessage(player *GamePlayer, msg proto.Message) {
 		Uid:       player.Uid,
 		GameId:    self.GameId,
 		Pid:       player.Pid,
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 		RoomId:    self.RoomId,
 		PbName:    protoName,
 		Sn:        self.Counter.GetIncrementValue(),

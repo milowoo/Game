@@ -194,14 +194,14 @@ func (c *MessageClient) Connect() error {
 
 func (c *MessageClient) HeartBeat() {
 	req := &pb.HeartbeatRequest{
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 	bytes, _ := proto.Marshal(req)
 	head := &pb.ClientCommonHead{
 		Pid:       c.Uid,
 		Sn:        gCounter.GetIncrementValue(),
 		ProtoName: proto.MessageName(req),
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	request := &pb.ClientCommonRequest{
@@ -234,7 +234,7 @@ func (c *MessageClient) SendEndHall() {
 		Pid:       c.Uid,
 		Sn:        gCounter.GetIncrementValue(),
 		ProtoName: proto.MessageName(enterRoomReq),
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	request := &pb.ClientCommonRequest{

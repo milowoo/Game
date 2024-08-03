@@ -6,6 +6,7 @@ import (
 	"gateway/src/pb"
 	"github.com/golang/protobuf/proto"
 	"github.com/nats-io/go-nats"
+	"strconv"
 	"time"
 )
 
@@ -27,12 +28,12 @@ func NewNatsMatch(sever *Server) *NatsMatch {
 	}
 }
 
-func (self *NatsMatch) MatchRequest(gameId string, uid string, score int32, opt string) error {
+func (self *NatsMatch) MatchRequest(gameId string, uid string, score string, opt string) error {
 	matchReq := &pb.MatchRequest{
 		GameId:         gameId,
 		Uid:            uid,
 		Score:          score,
-		TimeStamp:      time.Now().Unix(),
+		TimeStamp:      strconv.FormatInt(time.Now().UnixMilli(), 10),
 		ReceiveSubject: self.receiveSubject,
 		Opt:            opt,
 	}

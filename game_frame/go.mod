@@ -7,7 +7,7 @@ toolchain go1.22.4
 require (
 	github.com/go-ini/ini v1.67.0
 	github.com/go-redis/redis/v8 v8.11.0
-	github.com/gogo/protobuf v1.1.1
+	github.com/golang/protobuf v1.5.4
 	github.com/nacos-group/nacos-sdk-go/v2 v2.1.1
 	github.com/nats-io/go-nats v1.7.2
 	google.golang.org/protobuf v1.33.0
@@ -21,7 +21,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect

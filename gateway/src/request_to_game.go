@@ -22,7 +22,7 @@ func (agent *Agent) RequestToGame(protoName string, protoMsg proto.Message) ([]b
 		"roomId":    agent.RoomId,
 		"pid":       agent.Pid,
 		"sn":        strconv.FormatInt(agent.Counter.GetIncrementValue(), 10),
-		"timestamp": strconv.FormatInt(time.Now().Unix(), 10),
+		"timestamp": strconv.FormatInt(time.Now().UnixMilli(), 10),
 		"pbName":    protoName,
 		"gatewayIp": GetHostIp(),
 		"data":      string(bytes),

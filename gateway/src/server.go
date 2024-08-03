@@ -218,7 +218,7 @@ func (self *Server) Run() {
 	self.Join()
 }
 
-func (self *Server) MatchRequest(gameId string, uid string, score int32, opt string) {
+func (self *Server) MatchRequest(gameId string, uid string, score string, opt string) {
 	RunOnMatch(self.MatchMgr.MsgFromServer, self.MatchMgr, func(match *NatsMatch) {
 		match.MatchRequest(gameId, uid, score, opt)
 	})

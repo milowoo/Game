@@ -96,11 +96,13 @@ func (self *NatsService) subscribeLoginHallRequest() {
 func (self *NatsService) subscribeMatchRequest() {
 	// 订阅Nats 匹配 主题
 	err := internal.NatsPool.SubscribeForRequest(constants.MATCH_SUBJECT, func(subj, reply string, msg interface{}) {
+		var request pb.MatchRequest
 		internal.GLog.Info("subscribeMatchRequest Subscribe request subject:%+v,receive massage:%+v,reply subject:%+v", subj, msg, reply)
 		req, err := utils.ConvertInterfaceToString(msg)
 		if err == nil {
-			var request pb.MatchRequest
 			proto.Unmarshal([]byte(req), &request)
+			internal.GLog.Info("subscribeMatchRequest %+v", &request)
+
 			gameMatch := self.Server.MatchMgr[request.GetGameId()]
 			if gameMatch == nil {
 				internal.GLog.Error("subscribeMatchRequest gameId %+v not found", request.GetGameId())
@@ -115,13 +117,12 @@ func (self *NatsService) subscribeMatchRequest() {
 			}
 
 			RunOnMatch(gameMatch.MsgFromNats, gameMatch, func(gameMatch *GameMatch) {
-				gameMatch.AddMatchRequest(&request)
 				response := &pb.MatchResponse{
 					Code: constants.CODE_SUCCESS,
 				}
-
 				res, _ := proto.Marshal(response)
 				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				gameMatch.AddMatchRequest(&request)
 			})
 		}
 	})

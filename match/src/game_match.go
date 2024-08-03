@@ -1,10 +1,7 @@
 package match
 
 import (
-	"bytes"
-	"compress/gzip"
 	"github.com/golang/protobuf/proto"
-	"io/ioutil"
 	"match/src/config"
 	"match/src/constants"
 	"match/src/domain"
@@ -19,42 +16,45 @@ import (
 const (
 	GAME_FPS            = 8
 	GAME_FRAME_INTERVAL = time.Second / GAME_FPS
+	GAME_MATCH_TIME     = time.Second * 2
 )
 
 type GameMatch struct {
-	Server      *Server
-	Config      *config.GlobalConfig
-	gameId      string
-	redisKey    string
-	lockKey     string
-	roomKey     string
-	GameInfo    *domain.GameInfo
-	frameTicker *time.Ticker
-	FrameID     int64
-	NextFrameId int64
-	rand        *rand.Rand
-	Counter     *utils.AtomicCounter
-	MsgFromNats chan utils.Closure
-	exit        chan bool
+	Server       *Server
+	Config       *config.GlobalConfig
+	gameId       string
+	redisKey     string
+	lockKey      string
+	lastMatchKey string
+	roomKey      string
+	GameInfo     *domain.GameInfo
+	frameTicker  *time.Ticker
+	FrameID      int64
+	NextFrameId  int64
+	rand         *rand.Rand
+	Counter      *utils.AtomicCounter
+	MsgFromNats  chan utils.Closure
+	exit         chan bool
 }
 
 func NewGameMatch(server *Server, gameInfo *domain.GameInfo) *GameMatch {
 	now := time.Now()
 	return &GameMatch{
-		Server:      server,
-		Config:      server.Config,
-		gameId:      gameInfo.GameId,
-		GameInfo:    gameInfo,
-		redisKey:    gameInfo.GameId + ".match.queue",
-		lockKey:     gameInfo.GameId + ".match.lock",
-		roomKey:     "match_room_key",
-		FrameID:     0,
-		NextFrameId: 0,
-		frameTicker: nil,
-		MsgFromNats: make(chan utils.Closure, 10*1024),
-		rand:        rand.New(rand.NewSource(now.Unix())),
-		Counter:     &utils.AtomicCounter{},
-		exit:        make(chan bool, 1),
+		Server:       server,
+		Config:       server.Config,
+		gameId:       gameInfo.GameId,
+		GameInfo:     gameInfo,
+		redisKey:     gameInfo.GameId + ".match.queue",
+		lockKey:      gameInfo.GameId + ".match.lock",
+		lastMatchKey: gameInfo.GameId + ".match.last.time",
+		roomKey:      "match_room_key",
+		FrameID:      0,
+		NextFrameId:  0,
+		frameTicker:  nil,
+		MsgFromNats:  make(chan utils.Closure, 10*1024),
+		rand:         rand.New(rand.NewSource(now.Unix())),
+		Counter:      &utils.AtomicCounter{},
+		exit:         make(chan bool, 1),
 	}
 }
 
@@ -104,23 +104,27 @@ func (self *GameMatch) Frame() {
 
 	if self.FrameID < self.NextFrameId {
 		return
-	} else {
-		self.NextFrameId = self.FrameID + GAME_FPS + utils.RandomInt(self.rand, 0, 10)
 	}
 
-	lock, err := internal.RedisDao.Lock(self.lockKey, "1", 2)
+	self.NextFrameId = self.FrameID + int64(GAME_MATCH_TIME/GAME_FRAME_INTERVAL)
+	lock, err := internal.RedisDao.Lock(self.lockKey, "1", 2*time.Second)
 	if err != nil {
 		internal.GLog.Error("game match redis lock error: %+v", err)
 		return
 	}
 	if lock {
-		for {
-			count, err := internal.RedisDao.LLen(self.redisKey)
-			if err != nil {
+		lastMatchTime, _ := internal.RedisDao.Get(self.lastMatchKey)
+		if len(lastMatchTime) > 1 {
+			matchTime, _ := strconv.ParseInt(lastMatchTime, 0, 64)
+			if time.Now().UnixMilli()-matchTime < 1000 {
+				internal.GLog.Info(" last match time is more than 1000 matchTime [%+v] cur time [%+v]",
+					matchTime, time.Now().UnixMilli())
 				internal.RedisDao.Unlock(self.lockKey)
-				internal.GLog.Error("redis count err: %v", err)
 				return
 			}
+		}
+		for {
+			count, _ := internal.RedisDao.LLen(self.redisKey)
 			if count == 0 {
 				internal.RedisDao.Unlock(self.lockKey)
 				return
@@ -129,9 +133,11 @@ func (self *GameMatch) Frame() {
 			if count >= 2 {
 				firstData, _ := internal.RedisDao.RPop(self.redisKey)
 				secondData, _ := internal.RedisDao.RPop(self.redisKey)
+				var firstMatchReq pb.MatchRequest
+				var secondMatchReq pb.MatchRequest
+				proto.Unmarshal([]byte(firstData), &firstMatchReq)
+				proto.Unmarshal([]byte(secondData), &secondMatchReq)
 
-				firstMatchReq := self.UnCompressed([]byte(firstData))
-				secondMatchReq := self.UnCompressed([]byte(secondData))
 				uidList := make([]*pb.MatchData, 0)
 				data := &pb.MatchData{
 					Pid: firstMatchReq.GetPid(),
@@ -147,24 +153,28 @@ func (self *GameMatch) Frame() {
 
 				roomId := self.GenRoomId()
 				gameIp := self.PublicCreateRoom(roomId)
-				self.Send2PlayerMatchRes(firstMatchReq, uidList, roomId, gameIp)
-				self.Send2PlayerMatchRes(secondMatchReq, uidList, roomId, gameIp)
+				self.Send2PlayerMatchRes(&firstMatchReq, uidList, roomId, gameIp)
+				self.Send2PlayerMatchRes(&secondMatchReq, uidList, roomId, gameIp)
 			} else {
 				//判断匹配时间
 				data, _ := internal.RedisDao.RPop(self.redisKey)
-				matchReq := self.UnCompressed([]byte(data))
-				if matchReq.GetTimeStamp()+int64(self.GameInfo.MatchTime) > int64(time.Now().Unix()) {
+				var matchReq pb.MatchRequest
+				proto.Unmarshal([]byte(data), &matchReq)
+
+				internal.GLog.Info("match  cur time [%+v] data %+v ", time.Now().UnixMilli(), &matchReq)
+				timestamp, _ := strconv.ParseInt(matchReq.GetTimeStamp(), 0, 64)
+				if timestamp+int64(self.GameInfo.MatchTime)*1000 > time.Now().UnixMilli() {
 					roomId := self.GenRoomId()
 					gameIp := self.PublicCreateRoom(roomId)
-					self.Send2PlayerWithAI(matchReq, roomId, gameIp)
+					self.Send2PlayerWithAI(&matchReq, roomId, gameIp)
 				} else {
 					internal.RedisDao.LPush(self.redisKey, data)
 				}
-
 				break
 			}
 		}
-
+		curTime := strconv.FormatInt(time.Now().UnixMilli(), 10)
+		internal.RedisDao.Set(self.lastMatchKey, curTime, 1000*time.Second)
 		internal.RedisDao.Unlock(self.lockKey)
 	}
 }
@@ -174,6 +184,9 @@ func (self *GameMatch) PublicCreateRoom(roomId string) string {
 	var response interface{}
 	internal.GLog.Info("PublicCreateRoom %+v roomId %+v", subject, roomId)
 	internal.NatsPool.Request(subject, roomId, &response, 1*time.Second)
+	if response == nil {
+		return ""
+	}
 	internal.GLog.Info("PublicCreateRoom roomId %+v response: %+v", roomId, response)
 	dataMap := response.(map[string]interface{})
 	hostIp := dataMap["data"].(string)
@@ -196,6 +209,7 @@ func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId strin
 	aiList := make([]*pb.MatchData, 0)
 	aiInfo := self.GetAiInfo()
 	if aiInfo == nil {
+		internal.GLog.Error("Send2PlayerWithAI get aiInfo failed %")
 		return
 	}
 
@@ -211,14 +225,14 @@ func (self *GameMatch) Send2PlayerWithAI(matchReq *pb.MatchRequest, roomId strin
 		GameId:    self.gameId,
 		Uid:       matchReq.GetUid(),
 		RoomId:    roomId,
-		Timestamp: time.Now().Unix(),
+		Timestamp: strconv.FormatInt(time.Now().UnixMilli(), 10),
 		UidList:   uidList,
 		AiUidList: aiList,
 		GameIp:    gameIp,
 	}
 
 	res, _ := proto.Marshal(response)
-
+	internal.GLog.Info("Send2PlayerWithAI uid %+v ", uidList)
 	internal.NatsPool.Publish(matchReq.GetReceiveSubject(), string(res))
 }
 
@@ -229,53 +243,16 @@ func (self *GameMatch) Send2PlayerMatchRes(matchReq *pb.MatchRequest, uidList []
 		GameId:    self.gameId,
 		Uid:       matchReq.GetUid(),
 		RoomId:    roomId,
-		Timestamp: time.Now().Unix(),
+		Timestamp: strconv.FormatInt(time.Now().UnixMilli(), 10),
 		UidList:   uidList,
 		AiUidList: make([]*pb.MatchData, 0),
 		GameIp:    gameIp,
 	}
 
+	internal.GLog.Info("Send2PlayerMatchRes gameId %+v uid %+v", self.gameId, uidList)
+
 	res, _ := proto.Marshal(response)
 	internal.NatsPool.Publish(matchReq.GetReceiveSubject(), string(res))
-}
-
-func (self *GameMatch) Compressed(req *pb.MatchRequest) []byte {
-	// 序列化 protobuf 消息
-	data, err := proto.Marshal(req)
-	if err != nil {
-		internal.GLog.Error("Failed to marshal message: %+v", err)
-	}
-	var compressedData []byte
-	buf := bytes.NewBuffer(compressedData)
-	writer := gzip.NewWriter(buf)
-	_, err = writer.Write(data)
-	if err != nil {
-		internal.GLog.Error("Failed to compress data: %+v", err)
-	}
-	writer.Close()
-	return buf.Bytes()
-}
-
-func (self *GameMatch) UnCompressed(compressedData []byte) *pb.MatchRequest {
-	buf := bytes.NewBuffer(compressedData)
-	reader, err := gzip.NewReader(buf)
-	if err != nil {
-		internal.GLog.Error("Failed to create gzip reader: %+v", err)
-	}
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		internal.GLog.Error("Failed to read compressed data: %v", err)
-	}
-
-	// 反序列化 protobuf 消息
-	var msg pb.MatchRequest
-	err = proto.Unmarshal(data, &msg)
-	if err != nil {
-		internal.GLog.Error("Failed to unmarshal message: %v", err)
-	}
-
-	reader.Close()
-	return &msg
 }
 
 func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
@@ -285,31 +262,41 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 		Pid: req.GetPid(),
 		Uid: req.GetUid(),
 	}
+	//todo  需要判断是否有重复的 match 请求
+	internal.GLog.Info("AddMatchRequest %+v", req)
+
 	uidList = append(uidList, data)
 	gameType := self.GameInfo.Type
 	if gameType == constants.GAME_TYPE_SINGLE || gameType == constants.GAME_TYPE_HALL_SINGLE {
+		roomId := self.gameId + "_room_" + req.GetUid()
+		hostIp := self.PublicCreateRoom(roomId)
+		//通知
 		response := &pb.MatchOverRes{
 			Code:      constants.CODE_SUCCESS,
 			Msg:       "Success",
 			GameId:    self.gameId,
 			Uid:       req.GetUid(),
-			RoomId:    self.gameId + "_room_" + req.GetUid(),
-			Timestamp: time.Now().Unix(),
+			RoomId:    roomId,
+			Timestamp: strconv.FormatInt(time.Now().UnixMilli(), 10),
 			UidList:   uidList,
 			AiUidList: make([]*pb.MatchData, 0),
+			GameIp:    hostIp,
 		}
 
 		res, _ := proto.Marshal(response)
+		internal.GLog.Info("AddMatchRequest response subject %+v", req.GetReceiveSubject())
 		internal.NatsPool.Publish(req.GetReceiveSubject(), string(res))
 	} else {
-		buf := self.Compressed(req)
+		internal.GLog.Info("AddMatchRequest 222")
+		buf, _ := proto.Marshal(req)
 		// 将压缩后的数据存储到 Redis 中
-		internal.RedisDao.LPush(self.redisKey, buf)
+		internal.RedisDao.LPush(self.redisKey, string(buf))
 	}
+
 }
 
 func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
-	lock, err := internal.RedisDao.Lock(self.lockKey, "1", 3)
+	lock, err := internal.RedisDao.Lock(self.lockKey, "1", 3*time.Second)
 	if err != nil {
 		internal.GLog.Error("CancelMatchRequest game match redis lock error: %+v", err)
 		return
@@ -333,17 +320,18 @@ func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
 				break
 			}
 			if len(data) > 1 {
-				matchReq := self.UnCompressed([]byte(data))
+				var matchReq pb.MatchRequest
+				proto.Unmarshal([]byte(data), &matchReq)
 				if matchReq.GetUid() == req.GetUid() {
 					break
 				}
-				matchList = append(matchList, matchReq)
+				matchList = append(matchList, &matchReq)
 			}
 		}
 
 		for _, matchReq := range matchList {
-			buf := self.Compressed(matchReq)
-			internal.RedisDao.LPush(self.redisKey, buf)
+			buf, _ := proto.Marshal(matchReq)
+			internal.RedisDao.LPush(self.redisKey, string(buf))
 		}
 	}
 }

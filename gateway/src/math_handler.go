@@ -56,7 +56,7 @@ func (agent *Agent) MatchHandler(head *pb.ClientCommonHead, request *pb.ClientMa
 	}
 
 	//发起匹配请求
-	agent.Server.MatchRequest(agent.GameId, agent.Uid, 1, opt)
+	agent.Server.MatchRequest(agent.GameId, agent.Uid, "1", opt)
 	agent.IsMatching = true
 	agent.MatchResponse(head, constants.CODE_SUCCESS, "success")
 }
