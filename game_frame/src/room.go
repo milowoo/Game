@@ -19,21 +19,8 @@ const (
 	ROOM_WAITING_PLAYERS_READY_TIME = time.Second * 20
 )
 
-type GamePlayer struct {
-	Uid             string
-	Pid             string
-	RoomId          string
-	HallId          string
-	GatewayIp       string
-	LoadingProgress int32
-	TotalUseTime    int
-	Score           int
-	IsAi            bool
-	IsNewPlayer     bool
-}
-
-func NewPlayer(roomId string, uid string, pid string, hostIp string, isAi bool) *GamePlayer {
-	p := &GamePlayer{
+func NewPlayer(roomId string, uid string, pid string, hostIp string, isAi bool) *domain.GamePlayer {
+	p := &domain.GamePlayer{
 		Uid:       uid,
 		Pid:       pid,
 		RoomId:    roomId,
@@ -60,8 +47,8 @@ type Room struct {
 	gameRunFrameId int //游戏运行的帧数
 	offLineFrameId int //掉线的帧数
 
-	uid2PlayerInfo  map[string]*GamePlayer
-	Players         []*GamePlayer
+	uid2PlayerInfo  map[string]*domain.GamePlayer
+	Players         []*domain.GamePlayer
 	frameTicker     *time.Ticker
 	MsgFromMgr      chan Closure
 	rand            *rand.Rand
@@ -83,8 +70,8 @@ type Room struct {
 }
 
 var validRoomProtocols = map[string]string{
-	"pb.c2sLoading":       "C2SLoading",
-	"pb.LoginHallRequest": "LoginHall",
+	"pb.LoginHallRequest":    "LoginHallHandler",
+	"pb.LoadProgressRequest": "LoadProgressHandler",
 
 	// 添加Room允许client访问的成员函数名
 }
@@ -106,13 +93,15 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 		forceExitFrame:     0,
 
 		// 登录成功，则会重置为0；登录失败则一段时间后自动结束房间。+5s是为了防止WaitReconnectDuration配置成0时，创建房间就自动结束了
-		Players:     make([]*GamePlayer, 0),
+		Players:     make([]*domain.GamePlayer, 0),
 		frameTicker: nil,
 		rand:        rand.New(rand.NewSource(now.Unix())),
 		state:       constants.ROOM_STATE_LOAD,
 		RoomId:      RoomId,
 		AiUid:       "",
 		WinUid:      "",
+
+		protocol2Method: make(map[string]reflect.Value),
 
 		MsgFromMgr: make(chan Closure, 1024*10),
 
@@ -136,36 +125,39 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 		protocol2Method[p] = m
 	}
 	self.protocol2Method = protocol2Method
+	internal.GLog.Info("NewRoom protocol2Method %+v", self.protocol2Method)
 
 	return self, nil
 }
 
 func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, data []byte) {
-	internal.GLog.Info("ApplyProtoHandler reply: %s", reply)
-	//method, ok := self.protocol2Method[head.ProtoName]
-	//if !ok {
-	//	self.Log.Info("method not found: %+v", head.ProtoName)
-	//	commonRes := &pb.GameCommonResponse{}
-	//	commonRes.Code = constants.SYSTEM_ERROR
-	//	commonRes.Msg = "system err"
-	//	res, _ := proto.Marshal(commonRes)
-	//	self.NatPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
-	//
-	//	return
-	//}
+	internal.GLog.Info("ApplyProtoHandler reply: %v [%+v]", reply, head.PbName)
+	method, ok := self.protocol2Method[head.PbName]
+	if !ok {
+		internal.GLog.Info("method not found: %+v", head.PbName)
+		commonRes := &pb.GameCommonResponse{}
+		commonRes.Code = constants.SYSTEM_ERROR
+		commonRes.Msg = "system err"
+		res, _ := proto.Marshal(commonRes)
+		internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 
-	if head.GetPbName() == "pb.LoginHallRequest" {
-		self.LoginHall(reply, head, data)
+		return
 	}
 
-	//self.Log.Info("ApplyProtoHandler 1111")
-	//in := []reflect.Value{
-	//	reflect.ValueOf(reply),
-	//	reflect.ValueOf(head),
-	//	reflect.ValueOf(msg),
+	//if head.GetPbName() == "pb.LoginHallRequest" {
+	//	self.LoginHall(reply, head, data)
 	//}
-	//method.Call(in)
-	//self.Log.Info("ApplyProtoHandler 2222")
+
+	var request proto.Message
+	proto.Unmarshal(data, request)
+	internal.GLog.Info("ApplyProtoHandler 1111")
+	in := []reflect.Value{
+		reflect.ValueOf(reply),
+		reflect.ValueOf(head),
+		reflect.ValueOf(&request),
+	}
+	method.Call(in)
+	internal.GLog.Info("ApplyProtoHandler 2222")
 }
 
 func (self *Room) Run() {
@@ -237,7 +229,7 @@ func (self *Room) RoomBroadcast(msg proto.Message) {
 	}
 }
 
-func (self *Room) Send2PlayerMessage(player *GamePlayer, msg proto.Message) {
+func (self *Room) Send2PlayerMessage(player *domain.GamePlayer, msg proto.Message) {
 	if player.IsAi {
 		return
 	}
@@ -281,7 +273,7 @@ func (self *Room) IsFirstLogin(uid string) bool {
 *
 获取竞争对手
 */
-func (self *Room) GetRival(uid string) *GamePlayer {
+func (self *Room) GetRival(uid string) *domain.GamePlayer {
 	for _, player := range self.Players {
 		if player.Uid != uid {
 			return player

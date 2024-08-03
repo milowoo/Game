@@ -68,7 +68,6 @@ func (self *NatsService) subscribeLoginHallRequest() {
 		var request pb.CreateHallRequest
 		proto.Unmarshal([]byte(req), &request)
 		gameMatch := self.Server.MatchMgr[request.GetGameId()]
-		internal.GLog.Info("subscribeLoginHallRequest adasd")
 		if gameMatch == nil {
 			internal.GLog.Error("subscribeLoginHallRequest gameId %+v not found", request.GetGameId())
 			response := &pb.CreateHallResponse{
@@ -81,10 +80,7 @@ func (self *NatsService) subscribeLoginHallRequest() {
 			return
 		}
 
-		internal.GLog.Info("subscribeLoginHallRequest 11111")
-
 		RunOnMatch(gameMatch.MsgFromNats, gameMatch, func(gameMatch *GameMatch) {
-			internal.GLog.Info("subscribeLoginHallRequest 22222")
 			gameMatch.LoginHallRequest(reply, &request)
 		})
 	})

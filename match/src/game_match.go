@@ -289,7 +289,7 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 	} else {
 		internal.GLog.Info("AddMatchRequest 222")
 		buf, _ := proto.Marshal(req)
-		// 将压缩后的数据存储到 Redis 中
+		// 将数据存储到 Redis 中
 		internal.RedisDao.LPush(self.redisKey, string(buf))
 	}
 
