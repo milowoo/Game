@@ -131,7 +131,7 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 }
 
 func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, data []byte) {
-	internal.GLog.Info("ApplyProtoHandler reply: %v [%+v]", reply, head.PbName)
+	internal.GLog.Info("ApplyProtoHandler [%+v] ", head.PbName)
 	method, ok := self.protocol2Method[head.PbName]
 	if !ok {
 		internal.GLog.Info("method not found: %+v", head.PbName)
@@ -144,20 +144,12 @@ func (self *Room) ApplyProtoHandler(reply string, head *pb.CommonHead, data []by
 		return
 	}
 
-	//if head.GetPbName() == "pb.LoginHallRequest" {
-	//	self.LoginHall(reply, head, data)
-	//}
-
-	var request proto.Message
-	proto.Unmarshal(data, request)
-	internal.GLog.Info("ApplyProtoHandler 1111")
 	in := []reflect.Value{
 		reflect.ValueOf(reply),
 		reflect.ValueOf(head),
-		reflect.ValueOf(&request),
+		reflect.ValueOf(data),
 	}
 	method.Call(in)
-	internal.GLog.Info("ApplyProtoHandler 2222")
 }
 
 func (self *Room) Run() {
@@ -199,11 +191,10 @@ func (self *Room) Run() {
 }
 
 func (self *Room) Frame() {
-	self.exit <- true
 }
 
 func (self *Room) SaveAndQuit() {
-
+	self.exit <- true
 }
 
 func (self *Room) ResponseGateway(reply string, head *pb.CommonHead, response proto.Message) {

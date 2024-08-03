@@ -7,14 +7,12 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-func (self *Room) LoginHallHandler(reply string, head *pb.CommonHead, request *pb.LoginHallRequest) {
+func (self *Room) LoginHallHandler(reply string, head *pb.CommonHead, data []byte) {
 	self.isHall = true
-	internal.GLog.Info("LoginHall reply: %s request %+v", reply, &request)
-	//var request pb.LoginHallRequest
-	//err := proto.Unmarshal(data, &request)
-	//if err != nil {
-	//	internal.GLog.Info("LoginHall proto.Unmarshal err: %s", err.Error())
-	//}
+	internal.GLog.Info("LoginHallHandler reply: %+v", reply)
+	var request pb.LoginHallRequest
+	proto.Unmarshal(data, &request)
+	internal.GLog.Info("LoginHallHandler reply: %s request [%+v]", reply, &request)
 
 	//查询用户的游戏信息存放在内存中
 	uid := head.Uid
@@ -29,7 +27,7 @@ func (self *Room) LoginHallHandler(reply string, head *pb.CommonHead, request *p
 		Msg:  "",
 	}
 
-	internal.GLog.Info("LoginHall reply: uid %+v success", uid)
+	internal.GLog.Info("LoginHallHandler reply: uid %+v success", uid)
 	head.PbName = proto.MessageName(response)
 	self.ResponseGateway(reply, head, response)
 }
