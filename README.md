@@ -13,6 +13,9 @@
 - 整合nats 消息中间件
 - 整合 nacos配置以及服务管理
 
+#### 系统框架图
+
+![img.png](img.png)
 
 #### 目录结构
 
@@ -90,6 +93,8 @@
           |_pb  proto 文件定义
           |_redis redis db 封装接口
           |_utils 服务通用接口封装
+    |_test 功能测试工具
+    |_yalitest 压力测试工具
 
 
 #### 用例
