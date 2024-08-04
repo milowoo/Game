@@ -8,7 +8,12 @@ option go_package = "../pb";
 
 // 心跳, gateway 通知游戏服，每2秒发送
 message PingRequest {
-    int64 timestamp = 1; // 服务器时间戳
+}
+
+// 心跳, gateway 通知游戏服，每2秒发送
+message PingResponse {
+    int32 code = 1;
+    string msg = 2;
 }
 
 message CommonHead {

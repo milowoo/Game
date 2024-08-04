@@ -47,6 +47,10 @@ func (s *RedisDao) Set(key string, value interface{}, expiration time.Duration) 
 	return s.client.Set(s.ctx, key, value, expiration).Err()
 }
 
+func (s *RedisDao) Del(key string) error {
+	return s.client.Del(s.ctx, key).Err()
+}
+
 // LPush 向列表左侧推入元素
 func (s *RedisDao) LPush(key string, values interface{}) error {
 	return s.client.LPush(s.ctx, key, values).Err()

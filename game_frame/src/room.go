@@ -30,6 +30,7 @@ func NewPlayer(roomId string, uid string, pid string, hostIp string, isAi bool) 
 		IsAi:            isAi,
 		IsNewPlayer:     false,
 		TotalUseTime:    0,
+		OffLineFrameId:  0,
 		Score:           0,
 		LoadingProgress: 0,
 	}
@@ -43,9 +44,8 @@ type Room struct {
 
 	GameId         string
 	GameInfo       *domain.GameInfo
-	frameId        int
-	gameRunFrameId int //游戏运行的帧数
-	offLineFrameId int //掉线的帧数
+	FrameId        int
+	GameRunFrameId int //游戏运行的帧数
 
 	uid2PlayerInfo  map[string]*domain.GamePlayer
 	Players         []*domain.GamePlayer
@@ -54,11 +54,11 @@ type Room struct {
 	rand            *rand.Rand
 	protocol2Method map[string]reflect.Value
 
-	state              string
+	State              string
 	RoomId             string
-	lastHeartBeatFrame int
-	stateTimeoutFrame  int
-	forceExitFrame     int
+	LastHeartBeatFrame int
+	StateTimeoutFrame  int
+	ForceExitFrame     int
 	TotalPoints        int
 	isHall             bool
 	IsAi               bool
@@ -72,6 +72,7 @@ type Room struct {
 var validRoomProtocols = map[string]string{
 	"pb.LoginHallRequest":    "LoginHallHandler",
 	"pb.LoadProgressRequest": "LoadProgressHandler",
+	"pb.PingRequest":         "PingHandler",
 
 	// 添加Room允许client访问的成员函数名
 }
@@ -86,17 +87,17 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 		GameId:   roomMgr.Server.Config.GameId,
 		GameInfo: roomMgr.Server.DynamicConfig.GameInfo,
 
-		frameId:            0,
-		gameRunFrameId:     0,
-		stateTimeoutFrame:  0,
-		lastHeartBeatFrame: 0,
-		forceExitFrame:     0,
+		FrameId:            0,
+		GameRunFrameId:     0,
+		StateTimeoutFrame:  0,
+		LastHeartBeatFrame: 0,
+		ForceExitFrame:     0,
 
 		// 登录成功，则会重置为0；登录失败则一段时间后自动结束房间。+5s是为了防止WaitReconnectDuration配置成0时，创建房间就自动结束了
 		Players:     make([]*domain.GamePlayer, 0),
 		frameTicker: nil,
 		rand:        rand.New(rand.NewSource(now.Unix())),
-		state:       constants.ROOM_STATE_LOAD,
+		State:       constants.ROOM_STATE_LOAD,
 		RoomId:      RoomId,
 		AiUid:       "",
 		WinUid:      "",
@@ -161,8 +162,9 @@ func (self *Room) Run() {
 	}()
 
 	self.frameTicker = time.NewTicker(ROOM_FRAME_INTERVAL)
+	self.StateTimeoutFrame = self.FrameId + int(ROOM_WAITING_PLAYERS_READY_TIME/ROOM_FRAME_INTERVAL)
 
-	self.state = constants.ROOM_STATE_LOAD
+	self.State = constants.ROOM_STATE_LOAD
 
 	defer func() {
 		self.frameTicker.Stop()
@@ -175,10 +177,10 @@ func (self *Room) Run() {
 			return
 		case <-self.frameTicker.C:
 			SafeRunClosure(self, func() {
-				self.frameId++
+				self.FrameId++
 
-				if self.gameRunFrameId != 0 {
-					self.gameRunFrameId++
+				if self.GameRunFrameId != 0 {
+					self.GameRunFrameId++
 				}
 				self.Frame()
 			})
@@ -191,6 +193,115 @@ func (self *Room) Run() {
 }
 
 func (self *Room) Frame() {
+
+	if self.checkReadyTimeOut() {
+		internal.GLog.Info("roomId %v checkReadyTimeOut", self.RoomId)
+		gameResult := self.getGameResult(constants.WIN_TYPE_NOT_START)
+		self.enterEndState(gameResult, constants.WIN_TYPE_NOT_START)
+		return
+	}
+
+	if self.checkTotalUseTimeOver() {
+		internal.GLog.Info("roomId %v checkTotalUseTimeOver", self.RoomId)
+		gameResult := self.getGameResult(constants.GAME_END_TOTAL_TIME_OVER)
+		self.enterEndState(gameResult, constants.GAME_END_TOTAL_TIME_OVER)
+		return
+	}
+
+	//判断是否断线超时
+	if self.checkOffline() {
+		gameResult := self.getGameResult(constants.GAME_END_OFFLINE)
+		self.enterEndState(gameResult, constants.GAME_END_OFFLINE)
+		return
+	}
+
+}
+
+func (self *Room) SetState(state string) {
+	self.State = state
+}
+
+func (self *Room) enterEndState(gameResult *pb.GameResult, reason string) {
+	self.State = constants.ROOM_STATE_START
+	//通知双方游戏结束
+
+	internal.GLog.Info("roomId %v end reason %v ", self.RoomId, reason)
+	self.onRoomEnd()
+}
+
+func (self *Room) onRoomEnd() {
+	internal.GLog.Info("roomId %s end", self.RoomId)
+	for _, playerInfo := range self.uid2PlayerInfo {
+		if playerInfo != nil {
+			//playerInfo.FlushCachedMsgs()
+		}
+	}
+
+	self.RoomMgrRun(func(roomMgr *RoomMgr) {
+		roomMgr.MakeRoomEnd(self.RoomId)
+	})
+
+	self.exit <- true
+}
+
+func (self *Room) RoomMgrRun(cb func(roomMgr *RoomMgr)) {
+	roomMgr := self.RoomMgr
+	roomMgr.MsgFromRoom <- func() {
+		cb(roomMgr)
+	}
+}
+
+func (self *Room) getGameResult(windType string) *pb.GameResult {
+	return &pb.GameResult{}
+}
+
+func (self *Room) checkOffline() bool {
+	if self.GameRunFrameId == 0 {
+		return false
+	}
+
+	for _, player := range self.uid2PlayerInfo {
+		if player.IsAi {
+			continue
+		}
+
+		if player.OffLineFrameId == 0 {
+			continue
+		}
+
+		if (self.GameRunFrameId-player.OffLineFrameId)/ROOM_FPS > 20 {
+			internal.GLog.Info("roomId %v offline end uid %v ", self.RoomId, player.Uid)
+			self.WinUid = self.getRivalUid(player.Uid)
+			return true
+		}
+	}
+
+	return false
+}
+
+func (self *Room) checkReadyTimeOut() bool {
+	if self.State != constants.ROOM_STATE_LOAD {
+		return false
+	}
+
+	if self.FrameId > self.StateTimeoutFrame {
+		return true
+	}
+
+	return false
+}
+
+func (self *Room) checkTotalUseTimeOver() bool {
+	if self.GameRunFrameId == 0 {
+		return false
+	}
+
+	if int32(self.GameRunFrameId/ROOM_FPS) >= self.GameInfo.GameTime {
+		self.WinUid = ""
+		return true
+	}
+
+	return false
 }
 
 func (self *Room) SaveAndQuit() {
@@ -267,6 +378,26 @@ func (self *Room) IsFirstLogin(uid string) bool {
 func (self *Room) GetRival(uid string) *domain.GamePlayer {
 	for _, player := range self.Players {
 		if player.Uid != uid {
+			return player
+		}
+	}
+
+	return nil
+}
+
+func (self *Room) getRivalUid(uid string) string {
+	for _, player := range self.Players {
+		if player.Uid != uid {
+			return player.Uid
+		}
+	}
+
+	return ""
+}
+
+func (self *Room) GetPlayer(uid string) *domain.GamePlayer {
+	for _, player := range self.Players {
+		if player.Uid == uid {
 			return player
 		}
 	}

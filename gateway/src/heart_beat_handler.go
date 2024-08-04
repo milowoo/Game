@@ -13,6 +13,6 @@ import (
 func (agent *Agent) HeartBeatHandler(head *pb.ClientCommonHead, request *pb.HeartbeatRequest) {
 	internal.GLog.Info("HeartBeatHandler %+v", request)
 	response := &pb.HeartbeatResponse{Timestamp: time.Now().UnixMilli()}
-	// agent.GamePing()
+	agent.GamePing()
 	agent.ReplyClient(head, response)
 }

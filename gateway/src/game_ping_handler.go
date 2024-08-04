@@ -3,7 +3,6 @@ package gateway
 import (
 	"gateway/src/pb"
 	"github.com/golang/protobuf/proto"
-	"time"
 )
 
 /**
@@ -11,9 +10,7 @@ import (
 */
 
 func (agent *Agent) GamePing() {
-	request := &pb.PingRequest{
-		Timestamp: time.Now().UnixMilli(),
-	}
+	request := &pb.PingRequest{}
 
 	protoName := proto.MessageName(request)
 	agent.RequestToGame(protoName, request)

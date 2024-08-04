@@ -28,4 +28,7 @@ const (
 	// 4000 - 5000 ucenter
 
 	// 5000 - 10000 game
+	INVALID_USER_ID  = 5001
+	INVALID_PROGRESS = 5002
+	GAME_IS_RUNING   = 5003
 )

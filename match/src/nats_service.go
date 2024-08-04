@@ -7,6 +7,7 @@ import (
 	"match/src/internal"
 	"match/src/pb"
 	"match/src/utils"
+	"time"
 )
 
 type NatsService struct {
@@ -102,22 +103,14 @@ func (self *NatsService) subscribeMatchRequest() {
 			gameMatch := self.Server.MatchMgr[request.GetGameId()]
 			if gameMatch == nil {
 				internal.GLog.Error("subscribeMatchRequest gameId %+v not found", request.GetGameId())
-				response := &pb.MatchResponse{
-					Code: constants.INVALID_GAME_ID,
-					Msg:  "invalid gameId",
-				}
-
-				res, _ := proto.Marshal(response)
-				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				self.responseMatch(reply, constants.INVALID_GAME_ID, "invalid gameId")
 				return
 			}
 
+			//校验用户是否在匹配中
+
 			RunOnMatch(gameMatch.MsgFromNats, gameMatch, func(gameMatch *GameMatch) {
-				response := &pb.MatchResponse{
-					Code: constants.CODE_SUCCESS,
-				}
-				res, _ := proto.Marshal(response)
-				internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
+				self.responseMatch(reply, constants.CODE_SUCCESS, "")
 				gameMatch.AddMatchRequest(&request)
 			})
 		}
@@ -127,6 +120,26 @@ func (self *NatsService) subscribeMatchRequest() {
 		internal.GLog.Error("subscribeMatchRequest err %+v", err)
 	}
 
+}
+
+func (self *NatsService) checkUserInMatching(uid string, gameId string) bool {
+	redisKey := utils.GetMatchUserKey(gameId, uid)
+	isExist, _ := internal.RedisDao.EXISTS(redisKey)
+	if isExist {
+		return true
+	}
+
+	internal.RedisDao.Set(redisKey, "1", 60*time.Second)
+	return false
+}
+
+func (self *NatsService) responseMatch(reply string, code int32, msg string) {
+	response := &pb.MatchResponse{
+		Code: code,
+		Msg:  msg,
+	}
+	res, _ := proto.Marshal(response)
+	internal.NatsPool.Publish(reply, map[string]interface{}{"res": "ok", "data": string(res)})
 }
 
 func (self *NatsService) subscribeCancelMatchRequest() {

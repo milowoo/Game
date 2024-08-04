@@ -155,6 +155,8 @@ func (self *GameMatch) Frame() {
 				gameIp := self.PublicCreateRoom(roomId)
 				self.Send2PlayerMatchRes(&firstMatchReq, uidList, roomId, gameIp)
 				self.Send2PlayerMatchRes(&secondMatchReq, uidList, roomId, gameIp)
+				self.deleteMatchUser(self.gameId, firstMatchReq.GetUid())
+				self.deleteMatchUser(self.gameId, secondMatchReq.GetUid())
 			} else {
 				//判断匹配时间
 				data, _ := internal.RedisDao.RPop(self.redisKey)
@@ -167,6 +169,7 @@ func (self *GameMatch) Frame() {
 					roomId := self.GenRoomId()
 					gameIp := self.PublicCreateRoom(roomId)
 					self.Send2PlayerWithAI(&matchReq, roomId, gameIp)
+					self.deleteMatchUser(self.gameId, matchReq.GetUid())
 				} else {
 					internal.RedisDao.LPush(self.redisKey, data)
 				}
@@ -262,8 +265,6 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 		Pid: req.GetPid(),
 		Uid: req.GetUid(),
 	}
-	//todo  需要判断是否有重复的 match 请求
-	internal.GLog.Info("AddMatchRequest %+v", req)
 
 	uidList = append(uidList, data)
 	gameType := self.GameInfo.Type
@@ -286,6 +287,7 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 		res, _ := proto.Marshal(response)
 		internal.GLog.Info("AddMatchRequest response subject %+v", req.GetReceiveSubject())
 		internal.NatsPool.Publish(req.GetReceiveSubject(), string(res))
+		self.deleteMatchUser(self.gameId, req.GetUid())
 	} else {
 		internal.GLog.Info("AddMatchRequest 222")
 		buf, _ := proto.Marshal(req)
@@ -293,6 +295,11 @@ func (self *GameMatch) AddMatchRequest(req *pb.MatchRequest) {
 		internal.RedisDao.LPush(self.redisKey, string(buf))
 	}
 
+}
+
+func (self *GameMatch) deleteMatchUser(gameId, uid string) {
+	redisKey := utils.GetMatchUserKey(gameId, uid)
+	internal.RedisDao.Del(redisKey)
 }
 
 func (self *GameMatch) CancelMatchRequest(req *pb.CancelMatchRequest) {
