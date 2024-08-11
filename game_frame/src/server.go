@@ -40,6 +40,8 @@ func NewServer() (*Server, error) {
 		WaitGroup: &sync.WaitGroup{},
 	}
 
+	internal.GameId = config.GameId
+
 	redisDao := redis.NewRedis(config.RedisConfig.Address, config.RedisConfig.MasterName, config.RedisConfig.Password)
 	internal.RedisDao = redisDao
 

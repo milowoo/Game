@@ -19,30 +19,10 @@ const (
 	ROOM_WAITING_PLAYERS_READY_TIME = time.Second * 20
 )
 
-func NewPlayer(roomId string, uid string, pid string, hostIp string, isAi bool) *domain.GamePlayer {
-	p := &domain.GamePlayer{
-		Uid:       uid,
-		Pid:       pid,
-		RoomId:    roomId,
-		HallId:    "",
-		GatewayIp: hostIp,
-
-		IsAi:            isAi,
-		IsNewPlayer:     false,
-		TotalUseTime:    0,
-		OffLineFrameId:  0,
-		Score:           0,
-		LoadingProgress: 0,
-	}
-
-	return p
-}
-
 type Room struct {
 	RoomMgr *RoomMgr
 	Counter *AtomicCounter
 
-	GameId         string
 	GameInfo       *domain.GameInfo
 	FrameId        int
 	GameRunFrameId int //游戏运行的帧数
@@ -54,17 +34,15 @@ type Room struct {
 	rand            *rand.Rand
 	protocol2Method map[string]reflect.Value
 
-	State              string
-	RoomId             string
-	LastHeartBeatFrame int
-	StateTimeoutFrame  int
-	ForceExitFrame     int
-	TotalPoints        int
-	isHall             bool
-	IsAi               bool
-	isInit             bool
-	AiUid              string //AI的UID
-	WinUid             string //赢的UID
+	State             string
+	RoomId            string
+	StateTimeoutFrame int
+	ForceExitFrame    int
+	isHall            bool
+	IsAi              bool
+	isInit            bool
+	AiUid             string //AI的UID
+	WinUid            string //赢的UID
 
 	exit chan bool
 }
@@ -84,14 +62,12 @@ func NewRoom(roomMgr *RoomMgr, RoomId string) (*Room, error) {
 	now := time.Now()
 	self := &Room{
 		RoomMgr:  roomMgr,
-		GameId:   roomMgr.Server.Config.GameId,
 		GameInfo: roomMgr.Server.DynamicConfig.GameInfo,
 
-		FrameId:            0,
-		GameRunFrameId:     0,
-		StateTimeoutFrame:  0,
-		LastHeartBeatFrame: 0,
-		ForceExitFrame:     0,
+		FrameId:           0,
+		GameRunFrameId:    0,
+		StateTimeoutFrame: 0,
+		ForceExitFrame:    0,
 
 		// 登录成功，则会重置为0；登录失败则一段时间后自动结束房间。+5s是为了防止WaitReconnectDuration配置成0时，创建房间就自动结束了
 		Players:     make([]*domain.GamePlayer, 0),
@@ -329,78 +305,4 @@ func (self *Room) RoomBroadcast(msg proto.Message) {
 	for _, player := range self.Players {
 		self.Send2PlayerMessage(player, msg)
 	}
-}
-
-func (self *Room) Send2PlayerMessage(player *domain.GamePlayer, msg proto.Message) {
-	if player.IsAi {
-		return
-	}
-
-	typ := reflect.TypeOf(msg)
-	protoName := typ.Elem().Name()
-	bytes, _ := proto.Marshal(msg)
-
-	head := &pb.PushHead{
-		Uid:       player.Uid,
-		GameId:    self.GameId,
-		Pid:       player.Pid,
-		Timestamp: time.Now().UnixMilli(),
-		RoomId:    self.RoomId,
-		PbName:    protoName,
-		Sn:        self.Counter.GetIncrementValue(),
-	}
-
-	data := &pb.GamePushMessage{
-		Head: head,
-		Data: string(bytes),
-	}
-	res, _ := proto.Marshal(data)
-	internal.NatsPool.Publish(constants.GetGamePushDataSubject(player.GatewayIp), map[string]interface{}{"res": "ok", "data": string(res)})
-}
-
-func (self *Room) IsFirstLogin(uid string) bool {
-	if len(self.Players) == 0 {
-		return true
-	}
-	for _, player := range self.Players {
-		if player.Uid == uid {
-			return false
-		}
-	}
-
-	return true
-}
-
-/*
-*
-获取竞争对手
-*/
-func (self *Room) GetRival(uid string) *domain.GamePlayer {
-	for _, player := range self.Players {
-		if player.Uid != uid {
-			return player
-		}
-	}
-
-	return nil
-}
-
-func (self *Room) getRivalUid(uid string) string {
-	for _, player := range self.Players {
-		if player.Uid != uid {
-			return player.Uid
-		}
-	}
-
-	return ""
-}
-
-func (self *Room) GetPlayer(uid string) *domain.GamePlayer {
-	for _, player := range self.Players {
-		if player.Uid == uid {
-			return player
-		}
-	}
-
-	return nil
 }

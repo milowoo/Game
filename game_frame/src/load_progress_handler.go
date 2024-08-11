@@ -12,7 +12,7 @@ func (self *Room) LoadProgressHandler(reply string, head *pb.CommonHead, data []
 	proto.Unmarshal(data, &request)
 	progressList := make([]*pb.Progress, 0)
 
-	internal.GLog.Info("LoadProgressHandler reply: %s request [%+v]", reply, &request)
+	internal.GLog.Info("LoadProgressHandler reply: %+v request [%+v]", reply, &request)
 
 	player := self.GetPlayer(head.GetUid())
 	if player == nil {

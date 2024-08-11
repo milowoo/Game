@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"game_frame/src/pb"
 	"net"
-	"reflect"
 	"strconv"
 	"sync/atomic"
 )
@@ -50,16 +49,6 @@ func RunOnRoom(c chan Closure, room *Room, cb func(room *Room)) {
 	c <- func() {
 		cb(room)
 	}
-}
-
-func ConvertInterfaceToString(data interface{}) (string, error) {
-	// 使用 reflect 包检查 data 是否为 string 类型
-	if reflect.TypeOf(data).Kind() != reflect.String {
-		return "", fmt.Errorf("expected a string, got %T", data)
-	}
-
-	// 如果是 string 类型，返回其数据
-	return data.(string), nil
 }
 
 // map[data: gameId:test4 gatewayIp:192.168.10.2 pbName:pb.LoginHallRequest roomId:test4_hall_1054 sn:2 timestamp:1.722344216e+09 uid:1054]

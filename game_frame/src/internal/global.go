@@ -13,3 +13,4 @@ var RedisDao *redis.RedisDao
 var NatsPool *mq.NatsPool
 var ConfigClient config_client.IConfigClient
 var NameClient naming_client.INamingClient
+var GameId string
